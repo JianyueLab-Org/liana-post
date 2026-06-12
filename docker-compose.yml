@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: nacos-standalone
+    environment:
+      - MODE=standalone # 单机模式运行
+      - JVM_XMS=256m     # 限制内存，防止大作业把你的电脑吃卡死
+      - JVM_XMX=256m
+    ports:
+      - "8848:8848"     # HTTP 端口
+      - "9848:9848"     # gRPC 客户端请求端口
+      - "9849:9849"     # gRPC 服务端同步端口
+    restart: always
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    ports:
+      - "6379:6379"     # Redis 默认端口
+    volumes:
+      - redis_data:/data   # 持久化存储
+    restart: always
+
+volumes:
+  redis_data:

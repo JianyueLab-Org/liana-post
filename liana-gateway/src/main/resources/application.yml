@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: liana-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        file-extension: yaml
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: tracking-alias
+          uri: lb://liana-tracking-service
+          predicates:
+            - Path=/liana-records-service/**
+          filters:
+            - StripPrefix=1
+  config:
+    import:
+      - optional:nacos:application.yml
+server:
+  port: 8080

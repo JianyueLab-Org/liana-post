@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/liana-auth-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-auth-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-branch-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-branch-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-center-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-center-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-common/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-dispatch-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-dispatch-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-facility-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-facility-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-facility/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-facility/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-gateway/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-gateway/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-oms-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-oms-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-syncer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-syncer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-tracking-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-tracking-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-transport-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-transport-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

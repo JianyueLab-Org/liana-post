@@ -1,0 +1,308 @@
+package com.liana.post.oms.service.impl;
+
+import com.liana.post.common.constant.LogisticsConstants;
+import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
+import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
+import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
+import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.util.UpuBarcodeUtil;
+import com.liana.post.oms.cache.RedisCacheSupport;
+import com.liana.post.oms.cache.RedisKeyConstants;
+import com.liana.post.oms.client.DispatchClient;
+import com.liana.post.oms.model.dto.CountryResponse;
+import com.liana.post.oms.model.dto.MailBagAssignRequest;
+import com.liana.post.oms.model.dto.MailCreateRequest;
+import com.liana.post.oms.model.dto.MailResponse;
+import com.liana.post.oms.model.dto.MailStatusUpdateRequest;
+import com.liana.post.oms.model.dto.ServiceTypeResponse;
+import com.liana.post.oms.model.entity.MailEntity;
+import com.liana.post.oms.model.entity.RecipientEntity;
+import com.liana.post.oms.model.entity.SenderEntity;
+import com.liana.post.common.model.JwtUserContext;
+import com.liana.post.common.util.JwtTokenUtil;
+import com.liana.post.oms.repository.OmsRepository;
+import com.liana.post.oms.service.OmsService;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.util.List;
+
+@Service
+public class OmsServiceImpl implements OmsService {
+    private static final Duration MAIL_TTL = Duration.ofMinutes(10);
+    private static final Duration CANDIDATE_TTL = Duration.ofMinutes(5);
+
+    private final OmsRepository omsRepository;
+    private final ObjectProvider<DispatchClient> dispatchClientProvider;
+    private final StringRedisTemplate redisTemplate;
+
+    public OmsServiceImpl(OmsRepository omsRepository, ObjectProvider<DispatchClient> dispatchClientProvider, StringRedisTemplate redisTemplate) {
+        this.omsRepository = omsRepository;
+        this.dispatchClientProvider = dispatchClientProvider;
+        this.redisTemplate = redisTemplate;
+    }
+
+    @Override
+    @Transactional
+    public MailResponse createMail(MailCreateRequest request) {
+        omsRepository.seedDefaults();
+
+        String facilityCode = resolveFacilityCode(request);
+        String mailScope = normalizeMailScope(request.getMailScope());
+
+        SenderEntity sender = new SenderEntity();
+        sender.setFullName(request.getSenderFullName());
+        sender.setPhone(request.getSenderPhone());
+        sender.setIdType(request.getSenderIdType());
+        sender.setIdNumber(request.getSenderIdNumber());
+        sender.setAddress(request.getSenderAddress());
+        sender.setPostcode(request.getSenderPostcode());
+        sender = omsRepository.saveSender(sender);
+
+        RecipientEntity recipient = new RecipientEntity();
+        recipient.setFullName(request.getRecipientFullName());
+        recipient.setPhone(request.getRecipientPhone());
+        recipient.setAddress(request.getRecipientAddress());
+        recipient.setPostcode(request.getRecipientPostcode());
+        recipient = omsRepository.saveRecipient(recipient);
+
+        if (omsRepository.findMailTypeByCode(request.getMailTypeCode()).isEmpty()) {
+            throw new BusinessException(400, "unsupported mail type code");
+        }
+        if (omsRepository.findServiceTypeByCode(request.getServiceType()).isEmpty()) {
+            throw new BusinessException(400, "unsupported service type");
+        }
+
+        MailEntity mail = new MailEntity();
+        mail.setWaybillNo(UpuBarcodeUtil.generateRandom("CP"));
+        mail.setMailTypeCode(request.getMailTypeCode());
+        mail.setServiceType(request.getServiceType().trim().toUpperCase());
+        mail.setMailScope(mailScope);
+        mail.setDestCountryCode(resolveDestCountryCode(mailScope, request.getDestCountryCode()));
+        mail.setSenderId(sender.getId());
+        mail.setRecipientId(recipient.getId());
+        mail.setOriginFacilityCode(facilityCode);
+        mail.setCurrentFacilityCode(facilityCode);
+        mail.setWeightGrams(request.getWeightGrams());
+        mail.setDeclaredValue(request.getDeclaredValue());
+        mail.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
+        mail = omsRepository.saveMail(mail);
+        evictMailCache(mail.getWaybillNo());
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
+    public MailResponse getMailByBarcode(String barcode) {
+        return toResponse(findMailOrThrow(barcode));
+    }
+
+    @Override
+    public MailResponse getMailByWaybillNo(String waybillNo) {
+        String cacheKey = RedisKeyConstants.OMS_MAIL_BY_WAYBILL_PREFIX + normalize(waybillNo);
+        return RedisCacheSupport.getOrLoad(redisTemplate, cacheKey, MailResponse.class, MAIL_TTL, () -> toResponse(findMailOrThrow(waybillNo)));
+    }
+
+    @Override
+    public List<MailResponse> listMails() {
+        return omsRepository.findAllMails().stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public List<MailResponse> listMailsByStatus(String status) {
+        String cacheKey = RedisKeyConstants.OMS_MAIL_LIST_BY_STATUS_PREFIX + normalize(status);
+        return RedisCacheSupport.getOrLoad(redisTemplate, cacheKey, List.class, MAIL_TTL,
+                () -> omsRepository.findMailsByStatus(status).stream().map(this::toResponse).toList());
+    }
+
+    @Override
+    public List<CountryResponse> listCountries() {
+        return omsRepository.findAllCountries().stream().map(com.liana.post.oms.util.OmsMapper::toCountryResponse).toList();
+    }
+
+    @Override
+    public List<ServiceTypeResponse> listServiceTypes() {
+        return omsRepository.findAllServiceTypes().stream().map(com.liana.post.oms.util.OmsMapper::toServiceTypeResponse).toList();
+    }
+
+    @Override
+    public List<ServiceTypeResponse> listServiceTypesByCountry(String countryCode) {
+        return omsRepository.findServiceTypesByCountryCode(countryCode).stream().map(com.liana.post.oms.util.OmsMapper::toServiceTypeResponse).toList();
+    }
+
+    @Override
+    public List<MailDispatchCandidateResponse> listDispatchCandidates(MailDispatchCandidateQueryRequest request) {
+        String cacheKey = RedisKeyConstants.OMS_DISPATCH_CANDIDATES_PREFIX + safeKey(request == null ? null : request.getCurrentFacilityCode()) + ":" + safeKey(request == null ? null : request.getDestFacilityCode()) + ":" + safeKey(request == null ? null : request.getMailTypeCode());
+        return RedisCacheSupport.getOrLoad(redisTemplate, cacheKey, new com.fasterxml.jackson.core.type.TypeReference<List<MailDispatchCandidateResponse>>() {}, CANDIDATE_TTL,
+                () -> omsRepository.findAllMails().stream()
+                        .filter(mail -> request == null || matches(mail.getCurrentFacilityCode(), request.getCurrentFacilityCode()))
+                        .filter(mail -> request == null || matches(mail.getDestFacilityCode(), request.getDestFacilityCode()))
+                        .filter(mail -> request == null || matches(mail.getMailTypeCode(), request.getMailTypeCode()))
+                        .filter(mail -> LogisticsConstants.MAIL_STATUS_CREATED.equals(mail.getStatus()))
+                        .filter(mail -> mail.getBagNo() == null || mail.getBagNo().isBlank())
+                        .map(mail -> {
+                            MailDispatchCandidateResponse response = new MailDispatchCandidateResponse();
+                            response.setWaybillNo(mail.getWaybillNo());
+                            response.setMailTypeCode(mail.getMailTypeCode());
+                            response.setStatus(mail.getStatus());
+                            response.setCurrentFacilityCode(mail.getCurrentFacilityCode());
+                            response.setDestFacilityCode(mail.getDestFacilityCode());
+                            response.setWeightGrams(mail.getWeightGrams());
+                            return response;
+                        }).toList());
+    }
+
+    @Override
+    @Transactional
+    public MailResponse updateMailStatus(String waybillNo, MailStatusUpdateRequest request) {
+        MailEntity mail = omsRepository.updateMailStatus(waybillNo, request.getStatus(), request.getCurrentFacilityCode());
+        evictMailCache(waybillNo);
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
+    @Transactional
+    public MailResponse assignMailBag(String waybillNo, MailBagAssignRequest request) {
+        MailEntity mail = omsRepository.assignMailBag(waybillNo, request.getBagNo(), request.getCurrentFacilityCode());
+        syncBagToDispatch(request.getBagNo(), request.getCurrentFacilityCode(), List.of(waybillNo));
+        evictMailCache(waybillNo);
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
+    @Transactional
+    public int assignMailBagToWaybillNos(List<String> waybillNos, String bagNo, String currentFacilityCode) {
+        int updated = omsRepository.assignMailBagToWaybillNos(waybillNos, bagNo, currentFacilityCode);
+        syncBagToDispatch(bagNo, currentFacilityCode, waybillNos);
+        for (String waybillNo : waybillNos) {
+            evictMailCache(waybillNo);
+        }
+        evictCandidateCache();
+        return updated;
+    }
+
+    @Override
+    public void initDefaults() {
+        omsRepository.seedDefaults();
+    }
+
+    private MailEntity findMailOrThrow(String barcode) {
+        return omsRepository.findMailByWaybillNo(normalize(barcode)).orElseThrow(() -> new BusinessException(404, "mail not found"));
+    }
+
+    private void syncBagToDispatch(String bagNo, String currentFacilityCode, List<String> waybillNos) {
+        if (bagNo == null || bagNo.isBlank() || waybillNos == null || waybillNos.isEmpty()) {
+            return;
+        }
+        DispatchClient dispatchClient = dispatchClientProvider.getIfAvailable();
+        if (dispatchClient == null) {
+            return;
+        }
+        MailBagSyncRequest request = new MailBagSyncRequest();
+        request.setBagNo(bagNo);
+        request.setCurrentFacilityCode(currentFacilityCode);
+        request.setWaybillNos(waybillNos);
+        try {
+            dispatchClient.syncMailBag(request);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void evictMailCache(String waybillNo) {
+        RedisCacheSupport.evict(redisTemplate, RedisKeyConstants.OMS_MAIL_BY_WAYBILL_PREFIX + normalize(waybillNo));
+    }
+
+    private void evictCandidateCache() {
+        RedisCacheSupport.evictLike(redisTemplate, RedisKeyConstants.OMS_DISPATCH_CANDIDATES_PREFIX);
+        RedisCacheSupport.evictLike(redisTemplate, RedisKeyConstants.OMS_MAIL_LIST_BY_STATUS_PREFIX);
+    }
+
+    private String resolveFacilityCode(MailCreateRequest request) {
+        if (request.getCurrentFacilityCode() != null && !request.getCurrentFacilityCode().isBlank()) {
+            return request.getCurrentFacilityCode().trim().toUpperCase();
+        }
+        if (request.getOriginFacilityCode() != null && !request.getOriginFacilityCode().isBlank()) {
+            return request.getOriginFacilityCode().trim().toUpperCase();
+        }
+        return null;
+    }
+
+    private String resolveDestCountryCode(String mailScope, String destCountryCode) {
+        if (!"INTERNATIONAL".equals(mailScope)) {
+            return null;
+        }
+        if (destCountryCode == null || destCountryCode.isBlank()) {
+            throw new BusinessException(400, "destCountryCode is required for international mail");
+        }
+        String normalized = destCountryCode.trim().toUpperCase();
+        if (omsRepository.findCountryByCode(normalized).isEmpty()) {
+            throw new BusinessException(404, "destination country not found: " + normalized);
+        }
+        return normalized;
+    }
+
+    private boolean matches(String actual, String expected) {
+        return expected == null || expected.isBlank() || (actual != null && actual.equalsIgnoreCase(expected.trim()));
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(400, "code cannot be blank");
+        }
+        return value.trim().toUpperCase();
+    }
+
+    private String safeKey(String value) {
+        return value == null || value.isBlank() ? "ALL" : value.trim().toUpperCase();
+    }
+
+    private String normalizeMailScope(String value) {
+        if (value == null || value.isBlank()) {
+            return "DOMESTIC";
+        }
+        String normalized = value.trim().toUpperCase();
+        if (!"DOMESTIC".equals(normalized) && !"INTERNATIONAL".equals(normalized)) {
+            throw new BusinessException(400, "unsupported mail scope");
+        }
+        return normalized;
+    }
+
+    private MailResponse toResponse(MailEntity mail) {
+        MailResponse response = new MailResponse();
+        response.setId(mail.getId());
+        response.setWaybillNo(mail.getWaybillNo());
+        response.setBagNo(mail.getBagNo());
+        response.setMailTypeCode(mail.getMailTypeCode());
+        response.setServiceType(mail.getServiceType());
+        response.setMailScope(normalizeMailScope(mail.getMailScope()));
+        response.setDestCountryCode(mail.getDestCountryCode());
+        response.setStatus(mail.getStatus());
+        response.setOriginFacilityCode(mail.getOriginFacilityCode());
+        response.setCurrentFacilityCode(mail.getCurrentFacilityCode());
+        response.setDestFacilityCode(mail.getDestFacilityCode());
+        response.setWeightGrams(mail.getWeightGrams());
+        response.setDeclaredValue(mail.getDeclaredValue());
+        response.setSenderFullName(loadSenderName(mail.getSenderId()));
+        response.setRecipientFullName(loadRecipientName(mail.getRecipientId()));
+        return response;
+    }
+
+    private String loadSenderName(Long senderId) {
+        if (senderId == null) {
+            return null;
+        }
+        return omsRepository.findSenderById(senderId).map(SenderEntity::getFullName).orElse(null);
+    }
+
+    private String loadRecipientName(Long recipientId) {
+        if (recipientId == null) {
+            return null;
+        }
+        return omsRepository.findRecipientById(recipientId).map(RecipientEntity::getFullName).orElse(null);
+    }
+}

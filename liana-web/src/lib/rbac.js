@@ -1,0 +1,173 @@
+const ROLE_MENU_RULES = {
+  CLERK: {
+    top: ['dashboard', 'mail', 'catalog', 'dispatch', 'tracking'],
+    children: {
+      mail: ['MAIL_CREATE', 'MAIL_QUERY'],
+      catalog: ['catalog-countries', 'catalog-service-types'],
+      dispatch: ['dispatch-bags', 'dispatch-create-bag', 'dispatch-handoff'],
+      tracking: ['TRACK_QUERY'],
+    },
+  },
+  MANAGER: {
+    top: ['dashboard', 'mail', 'catalog', 'tracking', 'facility', 'transport'],
+    children: {
+      mail: ['MAIL_CREATE', 'MAIL_QUERY'],
+      catalog: ['catalog-countries', 'catalog-service-types'],
+      tracking: ['TRACK_QUERY'],
+      facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
+      transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
+    },
+  },
+  SORTER: {
+    top: ['dashboard', 'catalog', 'dispatch', 'tracking', 'facility', 'transport'],
+    children: {
+      catalog: ['catalog-countries', 'catalog-service-types'],
+      dispatch: ['dispatch-bags', 'dispatch-create-bag', 'dispatch-handoff'],
+      tracking: ['TRACK_QUERY'],
+      facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
+      transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
+    },
+  },
+  ADMIN: {
+    top: ['dashboard', 'catalog', 'facility', 'transport', 'system', 'sync'],
+    children: {
+      catalog: ['catalog-countries', 'catalog-service-types'],
+      facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
+      transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
+      system: ['system-users', 'system-roles', 'system-permissions'],
+      sync: ['sync-outbox', 'sync-tasks'],
+    },
+  },
+};
+
+const MENU_LIBRARY = {
+  dashboard: { id: 'dashboard', name: '工作台', path: '/dashboard', kind: 'link' },
+  mail: {
+    id: 'mail',
+    name: '收寄',
+    path: '/mail/create',
+    kind: 'group',
+    children: [
+      { id: 'mail-create', name: '收寄录入', path: '/mail/create', permission: 'MAIL_CREATE' },
+      { id: 'mail-list', name: '邮件台账', path: '/mail/list', permission: 'MAIL_QUERY' },
+    ],
+  },
+  catalog: {
+    id: 'catalog',
+    name: '基础资料',
+    path: '/catalog/countries',
+    kind: 'group',
+    children: [
+      { id: 'catalog-countries', name: '国家管理', path: '/catalog/countries' },
+      { id: 'catalog-service-types', name: '服务类型', path: '/catalog/service-types' },
+    ],
+  },
+  dispatch: {
+    id: 'dispatch',
+    name: '封发',
+    path: '/dispatch/bags',
+    kind: 'group',
+    children: [
+      { id: 'dispatch-bags', name: '邮袋管理', path: '/dispatch/bags' },
+      { id: 'dispatch-create-bag', name: '建袋作业', path: '/dispatch/create-bag' },
+      { id: 'dispatch-handoff', name: '交接确认', path: '/dispatch/handoff' },
+    ],
+  },
+  tracking: {
+    id: 'tracking',
+    name: '查询',
+    path: '/tracking/search',
+    kind: 'group',
+    children: [
+      { id: 'tracking-search', name: '轨迹查询', path: '/tracking/search', permission: 'TRACK_QUERY' },
+      { id: 'tracking-events', name: '事件流', path: '/tracking/events', permission: 'TRACK_QUERY' },
+    ],
+  },
+  facility: {
+    id: 'facility',
+    name: '邮政网络',
+    path: '/facility/offices',
+    kind: 'group',
+    children: [
+      { id: 'facility-offices', name: '网点', path: '/facility/offices' },
+      { id: 'facility-hubs', name: '分拣中心', path: '/facility/hubs' },
+      { id: 'facility-routes', name: '封发关系管理', path: '/facility/routes' },
+    ],
+  },
+  transport: {
+    id: 'transport',
+    name: '运输管理',
+    path: '/transport/assets',
+    kind: 'group',
+    children: [
+      { id: 'transport-assets', name: '运输资源', path: '/transport/assets' },
+      { id: 'transport-routes', name: '运输线路', path: '/transport/routes' },
+      { id: 'transport-schedules', name: '运输计划', path: '/transport/schedules' },
+      { id: 'transport-tasks', name: '运输任务', path: '/transport/tasks' },
+    ],
+  },
+  system: {
+    id: 'system',
+    name: '系统管理',
+    path: '/system/users',
+    kind: 'group',
+    children: [
+      { id: 'system-users', name: '用户管理', path: '/system/users' },
+      { id: 'system-roles', name: '角色管理', path: '/system/roles' },
+      { id: 'system-permissions', name: '权限管理', path: '/system/permissions' },
+    ],
+  },
+  sync: {
+    id: 'sync',
+    name: '同步监控',
+    path: '/sync/outbox',
+    kind: 'group',
+    children: [
+      { id: 'sync-outbox', name: 'Outbox', path: '/sync/outbox' },
+      { id: 'sync-tasks', name: '任务监控', path: '/sync/tasks' },
+    ],
+  },
+};
+
+function allowByPermission(permissions = [], permission) {
+  if (!permission) return true;
+  return permissions.includes(permission);
+}
+
+export function buildMenuTree(profile = {}) {
+  const role = profile.role || 'CLERK';
+  const permissions = profile.permissions || [];
+  const rule = ROLE_MENU_RULES[role] || ROLE_MENU_RULES.CLERK;
+
+  const nodes = [];
+  for (const key of rule.top) {
+    const entry = MENU_LIBRARY[key];
+    if (!entry) continue;
+    if (!entry.children) {
+      nodes.push({ ...entry, children: [] });
+      continue;
+    }
+    const children = entry.children.filter((child) => allowByPermission(permissions, child.permission));
+    if (!children.length) continue;
+    nodes.push({ ...entry, children });
+  }
+  return nodes;
+}
+
+export function flattenMenu(nodes = []) {
+  const result = [];
+  const walk = (items) => {
+    items.forEach((item) => {
+      result.push(item);
+      if (item.children?.length) walk(item.children);
+    });
+  };
+  walk(nodes);
+  return result;
+}
+
+export function firstAccessiblePath(profile = {}) {
+  const tree = buildMenuTree(profile);
+  const flat = flattenMenu(tree);
+  return flat[0]?.path || '/dashboard';
+}

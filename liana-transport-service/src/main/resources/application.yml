@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: liana-transport-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        file-extension: yaml
+  config:
+    import:
+      - optional:nacos:application.yml
+  datasource:
+    url: ${TRANSPORT_DB_URL:jdbc:mysql://127.0.0.1:3306/transport_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${TRANSPORT_DB_USERNAME:root}
+    password: ${TRANSPORT_DB_PASSWORD:wuyujie}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: embedded
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      continue-on-error: true
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+server:
+  port: 8086

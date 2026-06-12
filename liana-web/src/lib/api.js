@@ -1,0 +1,223 @@
+import { request } from './gatewayApi';
+
+function unwrapList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    if (Array.isArray(payload.list)) return payload.list;
+    if (Array.isArray(payload.data)) return payload.data;
+  }
+  return [];
+}
+
+export const authApi = {
+  login(payload) {
+    return request('auth', '/api/auth/login', { method: 'POST', body: payload });
+  },
+  profile(username, token) {
+    return request('auth', '/api/auth/profile', { query: { username }, token });
+  },
+  validateToken(token) {
+    return request('auth', '/api/auth/token/validate', { token });
+  },
+  users(token) {
+    return request('auth', '/api/auth/system/users', { token }).then(unwrapList);
+  },
+  createUser(payload, token) {
+    return request('auth', '/api/auth/system/users', { method: 'POST', body: payload, token });
+  },
+  resetPassword(payload, token) {
+    return request('auth', '/api/auth/system/users/password/reset', { method: 'POST', body: payload, token });
+  },
+  roles(token) {
+    return request('auth', '/api/auth/system/roles', { token }).then(unwrapList);
+  },
+  permissions(token) {
+    return request('auth', '/api/auth/system/permissions', { token }).then(unwrapList);
+  },
+  bootstrapSystem(payload, token) {
+    return request('auth', '/api/auth/system/project/init', { method: 'POST', token });
+  },
+};
+
+export const mailApi = {
+  create(payload, token) {
+    return request('oms', '/api/oms/mails', { method: 'POST', body: payload, token });
+  },
+  listMailTypes(token) {
+    return request('oms', '/api/oms/mail-types', { token }).then(unwrapList);
+  },
+  listCountries(token) {
+    return request('oms', '/api/oms/countries', { token }).then(unwrapList);
+  },
+  listServiceTypes(token) {
+    return request('oms', '/api/oms/service-types', { token }).then(unwrapList);
+  },
+  listServiceTypesByCountry(countryCode, token) {
+    return request('oms', '/api/oms/service-types/by-country', { query: { countryCode }, token }).then(unwrapList);
+  },
+  list(token) {
+    return request('oms', '/api/oms/mails', { token }).then(unwrapList);
+  },
+  detail(waybillNo, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}`, { token });
+  },
+  byBarcode(barcode, token) {
+    return request('oms', '/api/oms/mails/by-barcode', { query: { barcode }, token });
+  },
+  listByStatus(status, token) {
+    return request('oms', `/api/oms/mails/status/${encodeURIComponent(status)}`, { token }).then(unwrapList);
+  },
+  dispatchCandidates(payload, token) {
+    return request('oms', '/api/oms/mails/dispatch-candidates', { method: 'POST', body: payload, token }).then(unwrapList);
+  },
+  updateStatus(waybillNo, payload, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/status`, { method: 'POST', body: payload, token });
+  },
+  assignBag(waybillNo, payload, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/bag`, { method: 'POST', body: payload, token });
+  },
+};
+
+export const dispatchApi = {
+  createRouteRule(payload, token) {
+    return request('dispatch', '/api/dispatch/route-rules', { method: 'POST', body: payload, token });
+  },
+  createBag(payload, token) {
+    return request('dispatch', '/api/dispatch/bags', { method: 'POST', body: payload, token });
+  },
+  syncMailBag(payload, token) {
+    return request('dispatch', '/api/dispatch/bags/sync-mail', { method: 'POST', body: payload, token });
+  },
+  createBatch(payload, token) {
+    return request('dispatch', '/api/dispatch/batches', { method: 'POST', body: payload, token });
+  },
+  approveBatch(batchNo, payload, token) {
+    return request('dispatch', `/api/dispatch/batches/${encodeURIComponent(batchNo)}/approve`, { method: 'POST', body: payload, token });
+  },
+  createHandoff(payload, token) {
+    return request('dispatch', '/api/dispatch/handoffs', { method: 'POST', body: payload, token });
+  },
+  listBags(token) {
+    return request('dispatch', '/api/dispatch/bags', { token }).then(unwrapList);
+  },
+  listBatches(token) {
+    return request('dispatch', '/api/dispatch/batches', { token }).then(unwrapList);
+  },
+  listHandoffs(token) {
+    return request('dispatch', '/api/dispatch/handoffs', { token }).then(unwrapList);
+  },
+};
+
+export const trackingApi = {
+  recordEvent(payload, token) {
+    return request('tracking', '/api/records/events', { method: 'POST', body: payload, token });
+  },
+  getEvent(eventNo, token) {
+    return request('tracking', `/api/records/events/${encodeURIComponent(eventNo)}`, { token });
+  },
+  listEvents(token) {
+    return request('tracking', '/api/records/events', { token }).then(unwrapList);
+  },
+  listEventsByWaybill(waybillNo, token) {
+    return request('tracking', `/api/records/events/waybill/${encodeURIComponent(waybillNo)}`, { token }).then(unwrapList);
+  },
+  search(payload, token) {
+    return request('tracking', '/api/records/events/search', { method: 'POST', body: payload, token }).then(unwrapList);
+  },
+};
+
+export const transportApi = {
+  listAssets(params, token) {
+    return request('transport', '/api/transport/assets', { query: params, token });
+  },
+  getAsset(code, token) {
+    return request('transport', `/api/transport/assets/${encodeURIComponent(code)}`, { token });
+  },
+  createAsset(payload, token) {
+    return request('transport', '/api/transport/assets', { method: 'POST', body: payload, token });
+  },
+  updateAsset(code, payload, token) {
+    return request('transport', `/api/transport/assets/${encodeURIComponent(code)}`, { method: 'PUT', body: payload, token });
+  },
+  listRoutes(params, token) {
+    return request('transport', '/api/transport/routes', { query: params, token });
+  },
+  getRoute(code, token) {
+    return request('transport', `/api/transport/routes/${encodeURIComponent(code)}`, { token });
+  },
+  createRoute(payload, token) {
+    return request('transport', '/api/transport/routes', { method: 'POST', body: payload, token });
+  },
+  updateRoute(code, payload, token) {
+    return request('transport', `/api/transport/routes/${encodeURIComponent(code)}`, { method: 'PUT', body: payload, token });
+  },
+  listSchedules(params, token) {
+    return request('transport', '/api/transport/schedules', { query: params, token });
+  },
+  getSchedule(code, token) {
+    return request('transport', `/api/transport/schedules/${encodeURIComponent(code)}`, { token });
+  },
+  createSchedule(payload, token) {
+    return request('transport', '/api/transport/schedules', { method: 'POST', body: payload, token });
+  },
+  updateSchedule(code, payload, token) {
+    return request('transport', `/api/transport/schedules/${encodeURIComponent(code)}`, { method: 'PUT', body: payload, token });
+  },
+  listTasks(params, token) {
+    return request('transport', '/api/transport/tasks', { query: params, token });
+  },
+  createTaskFromDispatchBag(dispatchBagId, token) {
+    return request('transport', `/api/transport/tasks/from-dispatch/${encodeURIComponent(dispatchBagId)}`, { method: 'POST', token });
+  },
+  getTask(code, token) {
+    return request('transport', `/api/transport/tasks/${encodeURIComponent(code)}`, { token });
+  },
+  createTask(payload, token) {
+    return request('transport', '/api/transport/tasks', { method: 'POST', body: payload, token });
+  },
+  updateTaskStatus(code, payload, token) {
+    return request('transport', `/api/transport/tasks/${encodeURIComponent(code)}/status`, { method: 'POST', body: payload, token });
+  },
+};
+
+export const facilityApi = {
+  listTypes(token) {
+    return request('facility', '/api/facilities/types', { token }).then(unwrapList);
+  },
+  getType(code, token) {
+    return request('facility', `/api/facilities/types/${encodeURIComponent(code)}`, { token });
+  },
+  createFacility(payload, token) {
+    return request('facility', '/api/facilities', { method: 'POST', body: payload, token });
+  },
+  listFacilities(token) {
+    return request('facility', '/api/facilities', { token }).then(unwrapList);
+  },
+  getFacility(facilityCode, token) {
+    return request('facility', `/api/facilities/${encodeURIComponent(facilityCode)}`, { token });
+  },
+  createRoute(payload, token) {
+    return request('facility', '/api/facilities/routes', { method: 'POST', body: payload, token });
+  },
+  updateRoute(routeCode, payload, token) {
+    return request('facility', `/api/facilities/routes/${encodeURIComponent(routeCode)}`, { method: 'PUT', body: payload, token });
+  },
+  listRoutes(token) {
+    return request('facility', '/api/facilities/routes', { token }).then(unwrapList);
+  },
+  getRoute(routeCode, token) {
+    return request('facility', `/api/facilities/routes/${encodeURIComponent(routeCode)}`, { token });
+  },
+};
+
+export const systemApi = {
+  unsupported() {
+    throw new Error('系统管理服务当前后端未提供控制器，暂未接入真实接口。');
+  },
+};
+
+export const syncApi = {
+  unsupported() {
+    throw new Error('同步监控服务当前后端未提供控制器，暂未接入真实接口。');
+  },
+};

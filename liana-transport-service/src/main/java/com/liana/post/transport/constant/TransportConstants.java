@@ -1,0 +1,28 @@
+package com.liana.post.transport.constant;
+
+public interface TransportConstants {
+    String TYPE_SHIP = "SHIP";
+    String TYPE_AIRCRAFT = "AIRCRAFT";
+    String TYPE_TRUCK = "TRUCK";
+
+    String STATUS_AVAILABLE = "AVAILABLE";
+    String STATUS_IN_SERVICE = "IN_SERVICE";
+    String STATUS_MAINTENANCE = "MAINTENANCE";
+    String STATUS_RETIRED = "RETIRED";
+
+    String ROUTE_TYPE_SEA = "SEA";
+    String ROUTE_TYPE_AIR = "AIR";
+    String ROUTE_TYPE_LAND = "LAND";
+
+    String SCHEDULE_STATUS_PLANNED = "PLANNED";
+    String SCHEDULE_STATUS_ACTIVE = "ACTIVE";
+    String SCHEDULE_STATUS_SUSPENDED = "SUSPENDED";
+
+    String TASK_STATUS_CREATED = "CREATED";
+    String TASK_STATUS_ASSIGNED = "ASSIGNED";
+    String TASK_STATUS_DEPARTED = "DEPARTED";
+    String TASK_STATUS_IN_TRANSIT = "IN_TRANSIT";
+    String TASK_STATUS_ARRIVED = "ARRIVED";
+    String TASK_STATUS_COMPLETED = "COMPLETED";
+    String TASK_STATUS_CANCELLED = "CANCELLED";
+}

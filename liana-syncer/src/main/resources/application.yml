@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: liana-syncer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        file-extension: yaml
+  config:
+    import:
+      - optional:nacos:application.yml
+  datasource:
+    url: ${SYNCER_DB_URL:jdbc:mysql://127.0.0.1:3306/syncer_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${SYNCER_DB_USERNAME:root}
+    password: ${SYNCER_DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+server:
+  port: 8085

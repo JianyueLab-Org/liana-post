@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: liana-auth-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        file-extension: yaml
+  config:
+    import:
+      - optional:nacos:application.yml
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:mysql://127.0.0.1:3306/auth_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${AUTH_DB_USERNAME:root}
+    password: ${AUTH_DB_PASSWORD:wuyujie}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: embedded # may delete later
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      continue-on-error: true
+server:
+  port: 8081
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
