@@ -17,6 +17,7 @@
         <module>liana-auth-service</module>
         <module>liana-oms-service</module>
         <module>liana-dispatch-service</module>
+        <module>liana-sorting-service</module>
         <module>liana-tracking-service</module>
         <module>liana-syncer</module>
     </modules>

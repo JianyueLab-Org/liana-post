@@ -7,8 +7,14 @@ import MailCreateView from '../views/mail/MailCreateView.vue';
 import MailListView from '../views/mail/MailListView.vue';
 import MailDetailView from '../views/mail/MailDetailView.vue';
 import DispatchBagsView from '../views/dispatch/DispatchBagsView.vue';
+import DispatchBatchesView from '../views/dispatch/DispatchBatchesView.vue';
 import DispatchCreateBagView from '../views/dispatch/DispatchCreateBagView.vue';
 import DispatchHandoffView from '../views/dispatch/DispatchHandoffView.vue';
+import SortingManifestsView from '../views/sorting/SortingManifestsView.vue';
+import SortingReceiveView from '../views/sorting/SortingReceiveView.vue';
+import SortingUnpackView from '../views/sorting/SortingUnpackView.vue';
+import SortingRouteView from '../views/sorting/SortingRouteView.vue';
+import SortingRebagView from '../views/sorting/SortingRebagView.vue';
 import TrackingSearchView from '../views/tracking/TrackingSearchView.vue';
 import TrackingEventsView from '../views/tracking/TrackingEventsView.vue';
 import FacilityOfficesView from '../views/facility/FacilityOfficesView.vue';
@@ -40,8 +46,14 @@ const routes = [
       { path: '/mail/list', name: 'mail-list', component: MailListView, meta: { title: '邮件台账', action: 'MAIL_QUERY' } },
       { path: '/mail/detail/:id', name: 'mail-detail', component: MailDetailView, props: true, meta: { title: '邮件详情', action: 'MAIL_QUERY' } },
       { path: '/dispatch/bags', name: 'dispatch-bags', component: DispatchBagsView, meta: { title: '邮袋管理' } },
+      { path: '/dispatch/batches', name: 'dispatch-batches', component: DispatchBatchesView, meta: { title: '批次管理' } },
       { path: '/dispatch/create-bag', name: 'dispatch-create-bag', component: DispatchCreateBagView, meta: { title: '建袋作业' } },
       { path: '/dispatch/handoff', name: 'dispatch-handoff', component: DispatchHandoffView, meta: { title: '交接确认' } },
+      { path: '/sorting/manifests', name: 'sorting-manifests', component: SortingManifestsView, meta: { title: '路单管理' } },
+      { path: '/sorting/receive', name: 'sorting-receive', component: SortingReceiveView, meta: { title: '接收勾核' } },
+      { path: '/sorting/unpack', name: 'sorting-unpack', component: SortingUnpackView, meta: { title: '开拆作业' } },
+      { path: '/sorting/route', name: 'sorting-route', component: SortingRouteView, meta: { title: '路由计算' } },
+      { path: '/sorting/rebag', name: 'sorting-rebag', component: SortingRebagView, meta: { title: '再次封发' } },
       { path: '/tracking/search', name: 'tracking-search', component: TrackingSearchView, meta: { title: '轨迹查询', action: 'TRACK_QUERY' } },
       { path: '/tracking/events', name: 'tracking-events', component: TrackingEventsView, meta: { title: '事件流', action: 'TRACK_QUERY' } },
       { path: '/facility/offices', name: 'facility-offices', component: FacilityOfficesView, meta: { title: '网点管理' } },
@@ -60,6 +72,7 @@ const routes = [
       { path: '/sync/tasks', name: 'sync-tasks', component: SyncTasksView, meta: { title: '任务监控' } },
       { path: '/mail', redirect: '/mail/list' },
       { path: '/dispatch', redirect: '/dispatch/bags' },
+      { path: '/sorting', redirect: '/sorting/receive' },
       { path: '/tracking', redirect: '/tracking/search' },
       { path: '/facility', redirect: '/facility/offices' },
       { path: '/transport', redirect: '/transport/assets' },

@@ -12,9 +12,16 @@ export const apiContracts = {
   },
   dispatch: {
     bags: { method: 'GET', path: '/dispatch/bags', mock: true, response: { code: 200, data: { list: [], page: 1, pageSize: 10, total: 0 } } },
+    batches: { method: 'GET', path: '/dispatch/batches', mock: true, response: { code: 200, data: { list: [], page: 1, pageSize: 10, total: 0 } } },
     createBag: { method: 'POST', path: '/dispatch/bag/create', mock: true, response: { code: 200, data: { bagNo: 'BG20260609001', status: 'DRAFT' } } },
     confirmBag: { method: 'POST', path: '/dispatch/bag/confirm', mock: true, response: { code: 200, data: { confirmed: true } } },
     handoff: { method: 'POST', path: '/dispatch/handoff', mock: true, response: { code: 200, data: { handoffNo: 'HF20260609001', status: 'HANDOFFED' } } },
+  },
+  sorting: {
+    receive: { method: 'POST', path: '/sorting/receive', mock: true, response: { code: 200, data: { packageNo: 'PKG202606140001', packageStatus: 'RECEIVED' } } },
+    unpack: { method: 'POST', path: '/sorting/unpack-item', mock: true, response: { code: 200, data: { list: [] } } },
+    route: { method: 'POST', path: '/sorting/route-calculate', mock: true, response: { code: 200, data: { routeCode: 'C1-STANDARD-01', cellCode: 'C1-CELL-01' } } },
+    rebag: { method: 'POST', path: '/sorting/re-bag', mock: true, response: { code: 200, data: { packageNo: 'B202606140001', packageStatus: 'SEALED' } } },
   },
   tracking: {
     mail: { method: 'GET', path: '/tracking/{mailNo}', mock: true, readOnly: true, response: { code: 200, data: { mailNo: 'MP202606090001', currentStatus: 'IN_TRANSIT', lastUpdatedAt: '2026-06-09 10:10:00' } } },

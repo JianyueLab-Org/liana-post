@@ -108,6 +108,48 @@ export const dispatchApi = {
   },
 };
 
+export const sortingApi = {
+  listPackages(token) {
+    return request('sorting', '/api/v1/sorting/packages', { token }).then(unwrapList);
+  },
+  listManifests(token) {
+    return request('sorting', '/api/v1/sorting/manifests', { token }).then(unwrapList);
+  },
+  getManifest(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}`, { token });
+  },
+  listLines(packageNo, token) {
+    return request('sorting', '/api/v1/sorting/lines', { query: { packageNo }, token }).then(unwrapList);
+  },
+  listLinesByRoute(token) {
+    return request('sorting', '/api/v1/sorting/lines', { token }).then(unwrapList);
+  },
+  routeCalculateScan(payload, token) {
+    return request('sorting', '/api/v1/sorting/route-calculate/scan', { method: 'POST', body: payload, token });
+  },
+  listDiscrepancies(packageNo, token) {
+    return request('sorting', '/api/v1/sorting/discrepancies', { query: { packageNo }, token }).then(unwrapList);
+  },
+  receive(payload, token) {
+    return request('sorting', '/api/v1/sorting/receive', { method: 'POST', body: payload, token });
+  },
+  unpackItem(payload, token) {
+    return request('sorting', '/api/v1/sorting/unpack-item', { method: 'POST', body: payload, token });
+  },
+  routeCalculate(payload, token) {
+    return request('sorting', '/api/v1/sorting/route-calculate', { method: 'POST', body: payload, token });
+  },
+  reBag(payload, token) {
+    return request('sorting', '/api/v1/sorting/re-bag', { method: 'POST', body: payload, token });
+  },
+  listSlots(token, stationCode) {
+    return request('sorting', '/api/v1/sorting/slots', { query: { stationCode }, token }).then(unwrapList);
+  },
+  sealBagBySlot(payload, token) {
+    return request('sorting', '/api/v1/sorting/slots/seal', { method: 'POST', body: payload, token });
+  },
+};
+
 export const trackingApi = {
   recordEvent(payload, token) {
     return request('tracking', '/api/records/events', { method: 'POST', body: payload, token });

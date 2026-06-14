@@ -3,6 +3,7 @@ package com.liana.post.dispatch.controller;
 
 import com.liana.post.common.dto.dispatch.DispatchBagBriefResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
+import com.liana.post.common.dto.sorting.ManifestArrivedRequest;
 import com.liana.post.common.model.Result;
 import com.liana.post.dispatch.model.dto.DispatchBagCreateRequest;
 import com.liana.post.dispatch.model.dto.DispatchBagResponse;
@@ -80,6 +81,11 @@ public class DispatchController {
     @PostMapping("/handoffs")
     public Result<HandoffRecordResponse> createHandoff(@Valid @RequestBody HandoffCreateRequest request) {
         return Result.ok(dispatchService.createHandoffRecord(request));
+    }
+
+    @PostMapping("/manifests/arrived")
+    public Result<Boolean> arrived(@Valid @RequestBody ManifestArrivedRequest request) {
+        return Result.ok(dispatchService.markManifestArrived(request));
     }
 
     @GetMapping("/bags")

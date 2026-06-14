@@ -8,6 +8,7 @@
         </div>
         <div class="flex gap-2">
           <button class="btn btn-primary" @click="goCreate">创建总包</button>
+          <button class="btn btn-secondary" @click="goBatches">批次管理</button>
           <button class="btn btn-secondary" @click="goHandoff">交接确认</button>
         </div>
       </div>
@@ -46,6 +47,7 @@ async function load() {
 }
 function open(row) { current.value = row; drawerOpen.value = true; }
 function goCreate() { router.push('/dispatch/create-bag'); }
+function goBatches() { router.push('/dispatch/batches'); }
 function goHandoff() { router.push('/dispatch/handoff'); }
 onMounted(load);
 </script>

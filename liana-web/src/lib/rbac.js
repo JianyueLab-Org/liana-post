@@ -4,7 +4,7 @@ const ROLE_MENU_RULES = {
     children: {
       mail: ['MAIL_CREATE', 'MAIL_QUERY'],
       catalog: ['catalog-countries', 'catalog-service-types'],
-      dispatch: ['dispatch-bags', 'dispatch-create-bag', 'dispatch-handoff'],
+      dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
       tracking: ['TRACK_QUERY'],
     },
   },
@@ -19,10 +19,11 @@ const ROLE_MENU_RULES = {
     },
   },
   SORTER: {
-    top: ['dashboard', 'catalog', 'dispatch', 'tracking', 'facility', 'transport'],
+    top: ['dashboard', 'catalog', 'dispatch', 'sorting', 'tracking', 'facility', 'transport'],
     children: {
       catalog: ['catalog-countries', 'catalog-service-types'],
-      dispatch: ['dispatch-bags', 'dispatch-create-bag', 'dispatch-handoff'],
+      dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
+      sorting: ['sorting-manifests', 'sorting-receive', 'sorting-unpack', 'sorting-route', 'sorting-rebag'],
       tracking: ['TRACK_QUERY'],
       facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
@@ -69,8 +70,22 @@ const MENU_LIBRARY = {
     kind: 'group',
     children: [
       { id: 'dispatch-bags', name: '邮袋管理', path: '/dispatch/bags' },
+      { id: 'dispatch-batches', name: '批次管理', path: '/dispatch/batches' },
       { id: 'dispatch-create-bag', name: '建袋作业', path: '/dispatch/create-bag' },
       { id: 'dispatch-handoff', name: '交接确认', path: '/dispatch/handoff' },
+    ],
+  },
+  sorting: {
+    id: 'sorting',
+    name: '分拣机构',
+    path: '/sorting/manifests',
+    kind: 'group',
+    children: [
+      { id: 'sorting-manifests', name: '路单管理', path: '/sorting/manifests' },
+      { id: 'sorting-receive', name: '接收勾核', path: '/sorting/receive' },
+      { id: 'sorting-unpack', name: '开拆作业', path: '/sorting/unpack' },
+      { id: 'sorting-route', name: '路由计算', path: '/sorting/route' },
+      { id: 'sorting-rebag', name: '再次封发', path: '/sorting/rebag' },
     ],
   },
   tracking: {

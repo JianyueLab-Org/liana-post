@@ -13,6 +13,7 @@
 
 ## Dispatch
 - GET /dispatch/bags
+- GET /dispatch/batches
 - POST /dispatch/bag/create
 - POST /dispatch/bag/confirm
 - POST /dispatch/handoff

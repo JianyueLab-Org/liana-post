@@ -19,6 +19,8 @@
     <file url="file://$PROJECT_DIR$/liana-gateway/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/liana-oms-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/liana-oms-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-sorting-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/liana-sorting-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/liana-syncer/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/liana-syncer/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/liana-tracking-service/src/main/java" charset="UTF-8" />

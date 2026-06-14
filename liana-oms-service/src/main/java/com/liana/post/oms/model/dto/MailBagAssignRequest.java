@@ -3,7 +3,6 @@ package com.liana.post.oms.model.dto;
 import jakarta.validation.constraints.NotBlank;
 
 public class MailBagAssignRequest {
-    @NotBlank
     private String bagNo;
     private String currentFacilityCode;
 

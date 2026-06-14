@@ -228,9 +228,13 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Transactional
     public MailEntity assignMailBag(String waybillNo, String bagNo, String currentFacilityCode) {
         MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
-        if (bagNo == null || bagNo.isBlank()) throw new BusinessException(400, "bagNo cannot be blank");
-        mail.setBagNo(bagNo.trim());
-        mail.setStatus(LogisticsConstants.MAIL_STATUS_DISPATCHED);
+        if (bagNo != null && !bagNo.isBlank()) {
+            mail.setBagNo(bagNo.trim());
+            mail.setStatus(LogisticsConstants.MAIL_STATUS_DISPATCHED);
+        } else {
+            mail.setBagNo(null);
+            mail.setStatus(LogisticsConstants.MAIL_STATUS_SORTED);
+        }
         if (currentFacilityCode != null && !currentFacilityCode.isBlank()) {
             mail.setCurrentFacilityCode(currentFacilityCode.trim());
         }

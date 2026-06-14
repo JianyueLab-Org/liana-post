@@ -27,7 +27,7 @@ export const mockSession = {
         { id: 'sync-tasks', name: '浠诲姟鐩戞帶', code: 'menu:sync:tasks', path: '/sync/tasks', type: 'menu' },
       ]},
     ],
-    actionPermissions: ['mail:create', 'mail:update', 'dispatch:create-bag', 'dispatch:handoff'],
+    actionPermissions: ['mail:create', 'mail:update', 'dispatch:create-bag', 'dispatch:handoff', 'sorting:receive', 'sorting:unpack', 'sorting:route', 'sorting:rebag'],
     dataPermissions: [{ scope: 'org', value: 'org-hk-001' }],
   },
 };

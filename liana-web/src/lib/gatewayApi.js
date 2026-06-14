@@ -3,6 +3,7 @@ const SERVICE_PREFIX = {
   facility: '/liana-facility-service',
   oms: '/liana-oms-service',
   dispatch: '/liana-dispatch-service',
+  sorting: '/liana-sorting-service',
   tracking: '/liana-records-service',
   transport: '/liana-transport-service',
 };

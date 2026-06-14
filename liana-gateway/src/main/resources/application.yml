@@ -19,6 +19,12 @@ spring:
             - Path=/liana-records-service/**
           filters:
             - StripPrefix=1
+        - id: sorting-alias
+          uri: lb://liana-sorting-service
+          predicates:
+            - Path=/liana-sorting-service/**
+          filters:
+            - StripPrefix=1
   config:
     import:
       - optional:nacos:application.yml
