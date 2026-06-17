@@ -15,11 +15,13 @@ import SortingReceiveView from '../views/sorting/SortingReceiveView.vue';
 import SortingUnpackView from '../views/sorting/SortingUnpackView.vue';
 import SortingRouteView from '../views/sorting/SortingRouteView.vue';
 import SortingRebagView from '../views/sorting/SortingRebagView.vue';
+import SortingExportView from '../views/sorting/SortingExportView.vue';
 import TrackingSearchView from '../views/tracking/TrackingSearchView.vue';
 import TrackingEventsView from '../views/tracking/TrackingEventsView.vue';
 import FacilityOfficesView from '../views/facility/FacilityOfficesView.vue';
 import FacilityHubsView from '../views/facility/FacilityHubsView.vue';
 import FacilityRoutesView from '../views/facility/FacilityRoutesView.vue';
+import FacilityAdminView from '../views/facility/FacilityAdminView.vue';
 import TransportAssetsView from '../views/transport/TransportAssetsView.vue';
 import TransportRoutesView from '../views/transport/TransportRoutesView.vue';
 import TransportSchedulesView from '../views/transport/TransportSchedulesView.vue';
@@ -31,6 +33,9 @@ import SyncOutboxView from '../views/sync/SyncOutboxView.vue';
 import SyncTasksView from '../views/sync/SyncTasksView.vue';
 import CountryCatalogView from '../views/catalog/CountryCatalogView.vue';
 import ServiceTypeCatalogView from '../views/catalog/ServiceTypeCatalogView.vue';
+import PostOfficeDeliveryView from '../views/delivery/PostOfficeDeliveryView.vue';
+import PostOfficePackagesView from '../views/delivery/PostOfficePackagesView.vue';
+import PostOfficeDeliveryPrintView from '../views/delivery/PostOfficeDeliveryPrintView.vue';
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -53,12 +58,14 @@ const routes = [
       { path: '/sorting/receive', name: 'sorting-receive', component: SortingReceiveView, meta: { title: '接收勾核' } },
       { path: '/sorting/unpack', name: 'sorting-unpack', component: SortingUnpackView, meta: { title: '开拆作业' } },
       { path: '/sorting/route', name: 'sorting-route', component: SortingRouteView, meta: { title: '路由计算' } },
+      { path: '/sorting/export', name: 'sorting-export', component: SortingExportView, meta: { title: '出口处理' } },
       { path: '/sorting/rebag', name: 'sorting-rebag', component: SortingRebagView, meta: { title: '再次封发' } },
       { path: '/tracking/search', name: 'tracking-search', component: TrackingSearchView, meta: { title: '轨迹查询', action: 'TRACK_QUERY' } },
       { path: '/tracking/events', name: 'tracking-events', component: TrackingEventsView, meta: { title: '事件流', action: 'TRACK_QUERY' } },
       { path: '/facility/offices', name: 'facility-offices', component: FacilityOfficesView, meta: { title: '网点管理' } },
       { path: '/facility/hubs', name: 'facility-hubs', component: FacilityHubsView, meta: { title: '分拣中心' } },
       { path: '/facility/routes', name: 'facility-routes', component: FacilityRoutesView, meta: { title: '运输路线' } },
+      { path: '/facility/admin', name: 'facility-admin', component: FacilityAdminView, meta: { title: '机构管理' } },
       { path: '/transport/assets', name: 'transport-assets', component: TransportAssetsView, meta: { title: '运输资源' } },
       { path: '/transport/routes', name: 'transport-routes', component: TransportRoutesView, meta: { title: '运输线路' } },
       { path: '/transport/schedules', name: 'transport-schedules', component: TransportSchedulesView, meta: { title: '运输计划' } },
@@ -68,6 +75,9 @@ const routes = [
       { path: '/system/permissions', name: 'system-permissions', component: SystemPermissionsView, meta: { title: '权限管理' } },
       { path: '/catalog/countries', name: 'catalog-countries', component: CountryCatalogView, meta: { title: '国家管理' } },
       { path: '/catalog/service-types', name: 'catalog-service-types', component: ServiceTypeCatalogView, meta: { title: '服务类型' } },
+      { path: '/delivery/postoffice', name: 'delivery-postoffice', component: PostOfficeDeliveryView, meta: { title: '投递工作台', action: 'MAIL_QUERY' } },
+      { path: '/delivery/print', name: 'delivery-print', component: PostOfficeDeliveryPrintView, meta: { title: '打印投递单', action: 'MAIL_QUERY' } },
+      { path: '/delivery/packages', name: 'delivery-packages', component: PostOfficePackagesView, meta: { title: '接收总包', action: 'MAIL_QUERY' } },
       { path: '/sync/outbox', name: 'sync-outbox', component: SyncOutboxView, meta: { title: 'Outbox' } },
       { path: '/sync/tasks', name: 'sync-tasks', component: SyncTasksView, meta: { title: '任务监控' } },
       { path: '/mail', redirect: '/mail/list' },
@@ -78,6 +88,7 @@ const routes = [
       { path: '/transport', redirect: '/transport/assets' },
       { path: '/system', redirect: '/system/users' },
       { path: '/catalog', redirect: '/catalog/countries' },
+      { path: '/delivery', redirect: '/delivery/print' },
       { path: '/sync', redirect: '/sync/outbox' },
     ],
   },
@@ -94,6 +105,12 @@ router.beforeEach(async (to) => {
   }
   if (!session.token) return '/login';
   if (!session.ready) await session.bootstrap();
+  if (to.path === '/sorting' || to.path === '/sorting/') {
+    return session.isInternationalGateway ? '/sorting/export' : '/sorting/receive';
+  }
+  if (to.path === '/sorting/export' && !session.isInternationalGateway) {
+    return '/sorting/receive';
+  }
   return true;
 });
 

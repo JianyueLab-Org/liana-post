@@ -3,11 +3,14 @@ package com.liana.post.sorting.service.impl;
 import com.liana.post.common.dto.sorting.ManifestArrivedRequest;
 import com.liana.post.common.dto.sorting.ManifestDTO;
 import com.liana.post.common.dto.sorting.TotalPackageDTO;
+import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
 import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
 import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.model.Result;
 import com.liana.post.common.util.IdGeneratorUtil;
+import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.oms.model.dto.MailResponse;
+import com.liana.post.oms.model.dto.MailSlotSummaryResponse;
 import com.liana.post.sorting.client.DispatchLifecycleClient;
 import com.liana.post.sorting.client.OmsClient;
 import com.liana.post.sorting.client.TrackingClient;
@@ -19,6 +22,7 @@ import com.liana.post.sorting.model.entity.SortingManifestEntity;
 import com.liana.post.sorting.model.entity.SortingManifestItemEntity;
 import com.liana.post.sorting.model.entity.SortingTotalPackageEntity;
 import com.liana.post.sorting.repository.SortingRepository;
+import com.liana.post.sorting.strategy.RoutingStrategy;
 import com.liana.post.sorting.service.SortingService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -32,22 +36,24 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class SortingServiceImpl implements SortingService {
 
     private final SortingRepository sortingRepository;
+    private final RoutingStrategy routingStrategy;
     private final ObjectProvider<OmsClient> omsClientProvider;
     private final ObjectProvider<TrackingClient> trackingClientProvider;
     private final ObjectProvider<DispatchLifecycleClient> dispatchLifecycleClientProvider;
 
     public SortingServiceImpl(SortingRepository sortingRepository,
+                              RoutingStrategy routingStrategy,
                               ObjectProvider<OmsClient> omsClientProvider,
                               ObjectProvider<TrackingClient> trackingClientProvider,
                               ObjectProvider<DispatchLifecycleClient> dispatchLifecycleClientProvider) {
         this.sortingRepository = sortingRepository;
+        this.routingStrategy = routingStrategy;
         this.omsClientProvider = omsClientProvider;
         this.trackingClientProvider = trackingClientProvider;
         this.dispatchLifecycleClientProvider = dispatchLifecycleClientProvider;
@@ -218,34 +224,45 @@ public class SortingServiceImpl implements SortingService {
         OmsClient omsClient = omsClientProvider.getIfAvailable();
         com.liana.post.common.model.Result<com.liana.post.oms.model.dto.MailResponse> mailResult = omsClient == null ? null : omsClient.getMail(itemNo);
         com.liana.post.oms.model.dto.MailResponse mail = mailResult == null ? null : mailResult.getData();
-        String destFacilityCode = mail != null && StringUtils.hasText(mail.getDestFacilityCode()) ? mail.getDestFacilityCode() : request.getStationCode();
-        String slotCode = resolveSlotCode(itemNo, destFacilityCode);
-        boolean danger = "RD588151316CN".equalsIgnoreCase(itemNo);
+        String currentFacilityCode = mail != null && StringUtils.hasText(mail.getCurrentFacilityCode())
+                ? mail.getCurrentFacilityCode()
+                : request.getStationCode();
+        RouteResult routeResult = routingStrategy.doRoute(itemNo, currentFacilityCode);
+        boolean danger = SortingConstants.SECURITY_STATUS_DANGER.equalsIgnoreCase(routeResult.getSecurityStatus());
 
         PackageItemLineEntity line = new PackageItemLineEntity();
-        line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), slotCode, itemNo));
+        line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), routeResult.getSlotCode(), itemNo));
         line.setItemNo(itemNo);
         line.setActionType(SortingConstants.LINE_ACTION_LOAD);
         line.setEventType(SortingConstants.EVENT_ROUTE);
         line.setScanMode(SortingConstants.SCAN_MODE_BLIND);
-        line.setToPackageNo(slotCode);
-        line.setTargetCenterCode(slotCode);
+        line.setToPackageNo(routeResult.getSlotCode());
+        line.setTargetCenterCode(routeResult.getSlotCode());
         line.setStationCode(request.getStationCode());
         line.setOperatorId(request.getOperatorId());
         line.setDeviceId(request.getDeviceId());
-        line.setExt("{\"securityStatus\":\"" + (danger ? SortingConstants.SECURITY_STATUS_DANGER : SortingConstants.SECURITY_STATUS_PASS) + "\"}");
+        line.setExt("{\"securityStatus\":\"" + routeResult.getSecurityStatus() + "\",\"nextHop\":\"" + escapeJson(routeResult.getNextHopCode()) + "\"}");
         sortingRepository.savePackageItemLine(line);
 
         if (danger) {
-            saveDiscrepancy(null, slotCode, itemNo, SortingConstants.DISCREPANCY_SECURITY_FAILED, SortingConstants.SOURCE_SECURITY, 1, 0);
+            saveDiscrepancy(null, routeResult.getSlotCode(), itemNo, SortingConstants.DISCREPANCY_SECURITY_FAILED, SortingConstants.SOURCE_SECURITY, 1, 0);
+        }
+
+        if (omsClient != null) {
+            com.liana.post.oms.model.dto.MailRouteAssignRequest routeRequest = new com.liana.post.oms.model.dto.MailRouteAssignRequest();
+            routeRequest.setCurrentSlot(routeResult.getSlotCode());
+            routeRequest.setDestinationNode(routeResult.getTargetNodeName());
+            routeRequest.setCurrentFacilityCode(request.getStationCode());
+            routeRequest.setStatus(danger ? com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_RETURNED : com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_SORTED);
+            omsClient.updateMailRoute(itemNo, routeRequest);
         }
 
         SortingSecurityAuditResponse response = new SortingSecurityAuditResponse();
         response.setItemNo(itemNo);
-        response.setSecurityStatus(danger ? SortingConstants.SECURITY_STATUS_DANGER : SortingConstants.SECURITY_STATUS_PASS);
-        response.setRouteCode(slotCode);
-        response.setNextHop(danger ? "RETURN_CENTER" : destFacilityCode);
-        response.setMessage(danger ? "[AI AUDIT] DANGER: blocked prohibited item" : "[AI AUDIT] PASS: security check ok");
+        response.setSecurityStatus(routeResult.getSecurityStatus());
+        response.setRouteCode(routeResult.getSlotCode());
+        response.setNextHop(routeResult.getNextHopCode());
+        response.setMessage(routeResult.getMessage());
         response.setXrayImage(danger ? "danger-xray.png" : "pass-xray.png");
         response.setAuditedAt(LocalDateTime.now());
         return response;
@@ -260,6 +277,81 @@ public class SortingServiceImpl implements SortingService {
         response.setNextPackageNo(IdGeneratorUtil.generateBagNo());
         response.setDecision("ROUTE_OK");
         return response;
+    }
+
+    @Override
+    public List<CountrySlotSummaryResponse> listCountrySlotSummaries(String stationCode) {
+        List<com.liana.post.oms.model.dto.MailResponse> mails = loadInternationalMails(stationCode);
+        if (mails.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<com.liana.post.oms.model.dto.MailResponse>> grouped = mails.stream()
+                .map(mail -> new java.util.AbstractMap.SimpleEntry<>(resolveCountrySlotKey(mail), mail))
+                .filter(entry -> StringUtils.hasText(entry.getKey()))
+                .collect(Collectors.groupingBy(java.util.Map.Entry::getKey, java.util.LinkedHashMap::new,
+                        Collectors.mapping(java.util.Map.Entry::getValue, Collectors.toList())));
+        Map<String, String> countryNames = loadCountryNames(grouped.keySet());
+        return grouped.entrySet().stream()
+                .map(entry -> toCountrySlotSummary(entry.getKey(), countryNames.get(entry.getKey()), entry.getValue()))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public List<SortingPackageResponse> sealCountrySlot(CountrySlotBulkRequest request) {
+        if (request == null) {
+            throw new BusinessException(400, "request cannot be null");
+        }
+        String stationCode = normalizeBlank(request.getStationCode());
+        String countryCode = normalizeBlank(request.getCountryCode());
+        List<String> itemNos = dedupe(request.getItemNos());
+        if (itemNos.isEmpty()) {
+            itemNos = loadInternationalMails(stationCode).stream()
+                    .filter(mail -> countryCode.equalsIgnoreCase(resolveCountrySlotKey(mail)))
+                    .map(com.liana.post.oms.model.dto.MailResponse::getWaybillNo)
+                    .toList();
+        }
+        if (itemNos.isEmpty()) {
+            throw new BusinessException(404, "no mails found for country slot");
+        }
+        String exportFacilityCode = StringUtils.hasText(request.getExportFacilityCode())
+                ? request.getExportFacilityCode().trim().toUpperCase()
+                : resolveExportFacilityCode(countryCode);
+        List<SortingPackageResponse> sealed = new ArrayList<>();
+        String bagNo = IdGeneratorUtil.generateBagNo();
+        int seq = 0;
+        for (String waybillNo : itemNos) {
+            seq++;
+            PackageItemLineEntity line = new PackageItemLineEntity();
+            line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), countryCode, waybillNo));
+            line.setItemNo(waybillNo);
+            line.setActionType(SortingConstants.LINE_ACTION_LOAD);
+            line.setEventType(SortingConstants.EVENT_ROUTE);
+            line.setScanMode(SortingConstants.SCAN_MODE_BLIND);
+            line.setFromPackageNo(null);
+            line.setToPackageNo(bagNo);
+            line.setTargetCenterCode(countryCode);
+            line.setStationCode(stationCode);
+            line.setOperatorId(request.getOperatorId());
+            line.setExt("{\"countryCode\":\"" + countryCode + "\",\"exportFacilityCode\":\"" + escapeJson(exportFacilityCode) + "\"}");
+            sortingRepository.savePackageItemLine(line);
+            updateMailRouteToCountry(waybillNo, countryCode, exportFacilityCode, stationCode);
+        }
+
+        SortingTotalPackageEntity totalPackage = new SortingTotalPackageEntity();
+        totalPackage.setPackageNo(bagNo);
+        totalPackage.setPackageLevel(SortingConstants.PACKAGE_LEVEL_EXPORT);
+        totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_SEALED);
+        totalPackage.setSourceOrgCode(stationCode);
+        totalPackage.setDestinationOrgCode(countryCode);
+        totalPackage.setPrealertFlag(1);
+        totalPackage = sortingRepository.saveTotalPackage(totalPackage);
+        totalPackage.setTerminalReason("COUNTRY_SLOT");
+        sortingRepository.updateTotalPackage(totalPackage);
+
+        sealed.add(toPackageResponse(totalPackage));
+        recordTracking(bagNo, SortingConstants.EVENT_REBAG, stationCode, request.getOperatorId(), "{\"countryCode\":\"" + countryCode + "\"}");
+        return sealed;
     }
 
     @Override
@@ -300,6 +392,13 @@ public class SortingServiceImpl implements SortingService {
 
     @Override
     public List<SortingSlotSummaryResponse> listSlotSummaries(String stationCode) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client != null) {
+            com.liana.post.common.model.Result<List<MailSlotSummaryResponse>> result = client.listActiveSlots();
+            if (result != null && result.getData() != null) {
+                return result.getData().stream().map(this::toSortingSlotSummary).filter(item -> item.getPendingCount() != null && item.getPendingCount() > 0).toList();
+            }
+        }
         List<PackageItemLineEntity> lines = sortingRepository.findAllPackageLines();
         Map<String, List<PackageItemLineEntity>> grouped = lines.stream()
                 .filter(line -> StringUtils.hasText(line.getTargetCenterCode()))
@@ -320,22 +419,12 @@ public class SortingServiceImpl implements SortingService {
         if (loadLines.isEmpty()) {
             throw new BusinessException(404, "slot not found: " + normalizedSlot);
         }
-        SortingTotalPackageEntity source = sortingRepository.findTotalPackageByNo(normalizedSlot).orElseGet(() -> {
-            SortingTotalPackageEntity entity = new SortingTotalPackageEntity();
-            entity.setPackageNo(normalizedSlot);
-            entity.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
-            entity.setPackageStatus(SortingConstants.PACKAGE_STATUS_OPENING);
-            entity.setSourceOrgCode(stationCode);
-            entity.setDestinationOrgCode(normalizedSlot);
-            return sortingRepository.saveTotalPackage(entity);
-        });
         SortingTotalPackageEntity totalPackage = new SortingTotalPackageEntity();
         totalPackage.setPackageNo(IdGeneratorUtil.generateBagNo());
         totalPackage.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
         totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_RAW);
         totalPackage.setSourceOrgCode(stationCode);
         totalPackage.setDestinationOrgCode(normalizedSlot);
-        totalPackage.setParentPackageNo(source.getPackageNo());
         totalPackage = sortingRepository.saveTotalPackage(totalPackage);
 
         for (PackageItemLineEntity loadLine : loadLines) {
@@ -354,6 +443,8 @@ public class SortingServiceImpl implements SortingService {
             updateMailBag(loadLine.getItemNo(), totalPackage.getPackageNo());
         }
 
+        persistSlotSeal(normalizedSlot, totalPackage.getPackageNo(), stationCode);
+
         totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_SEALED);
         totalPackage.setSealedAt(LocalDateTime.now());
         sortingRepository.updateTotalPackage(totalPackage);
@@ -362,8 +453,16 @@ public class SortingServiceImpl implements SortingService {
     }
 
     @Override
-    public List<SortingPackageResponse> listPackages() {
-        return sortingRepository.findAllTotalPackages().stream().map(this::toPackageResponse).toList();
+    public List<SortingPackageResponse> listPackages(String authorization) {
+        String facilityCode = resolveFacilityCode(authorization);
+        if (!StringUtils.hasText(facilityCode)) {
+            return List.of();
+        }
+        List<SortingTotalPackageEntity> totalPackages = sortingRepository.findTotalPackagesByDestination(facilityCode);
+        return totalPackages.stream()
+                .filter(this::isVisibleTransitPackage)
+                .map(this::toPackageResponse)
+                .toList();
     }
 
     @Override
@@ -458,6 +557,30 @@ public class SortingServiceImpl implements SortingService {
         client.updateMailBag(itemNo, request);
     }
 
+    private void persistSlotSeal(String slotCode, String packageId, String stationCode) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client == null) {
+            return;
+        }
+        com.liana.post.oms.model.dto.MailSlotSealRequest request = new com.liana.post.oms.model.dto.MailSlotSealRequest();
+        request.setPackageId(packageId);
+        request.setDestinationNode(resolveDestinationNodeBySlot(slotCode));
+        request.setCurrentFacilityCode(stationCode);
+        request.setStatus(com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_DISPATCHED);
+        client.sealMailSlot(slotCode, request);
+    }
+
+    private String resolveDestinationNodeBySlot(String slotCode) {
+        String normalized = normalizeBlank(slotCode);
+        if ("22".equals(normalized)) {
+            return "A2";
+        }
+        if ("10".equals(normalized)) {
+            return "B2";
+        }
+        return normalized;
+    }
+
     @Transactional
     public Boolean notifyDispatchArrived(String manifestNo, String packageNo, String stationCode, String remark) {
         DispatchLifecycleClient client = dispatchLifecycleClientProvider.getIfAvailable();
@@ -513,6 +636,13 @@ public class SortingServiceImpl implements SortingService {
         return StringUtils.hasText(destinationOrgCode) ? destinationOrgCode.trim().toUpperCase() + "-SLOT-" + suffix : "SLOT-" + suffix;
     }
 
+    private String escapeJson(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     private SortingSlotSummaryResponse toSlotSummary(String slotCode, List<PackageItemLineEntity> lines) {
         SortingSlotSummaryResponse response = new SortingSlotSummaryResponse();
         response.setSlotCode(slotCode);
@@ -527,6 +657,18 @@ public class SortingServiceImpl implements SortingService {
         response.setPreviewItemNo(items.isEmpty() ? null : items.get(0));
         response.setRouteCode(slotCode);
         response.setBagStatus(SortingConstants.PACKAGE_STATUS_RAW);
+        return response;
+    }
+
+    private SortingSlotSummaryResponse toSortingSlotSummary(MailSlotSummaryResponse summary) {
+        SortingSlotSummaryResponse response = new SortingSlotSummaryResponse();
+        response.setSlotCode(summary.getSlotCode());
+        response.setDestinationOrgCode(summary.getDestinationNode());
+        response.setPendingCount(summary.getPendingCount());
+        response.setPreviewItemNos(summary.getPreviewItemNos());
+        response.setPreviewItemNo(summary.getPreviewItemNos() == null || summary.getPreviewItemNos().isEmpty() ? null : summary.getPreviewItemNos().get(0));
+        response.setRouteCode(summary.getNextHopCode());
+        response.setBagStatus(summary.getBagStatus());
         return response;
     }
 
@@ -574,6 +716,24 @@ public class SortingServiceImpl implements SortingService {
         return value.trim().toUpperCase();
     }
 
+    private String resolveFacilityCode(String authorization) {
+        if (!StringUtils.hasText(authorization)) {
+            return null;
+        }
+        String token = authorization.replaceFirst("(?i)^Bearer\\s+", "");
+        return JwtTokenUtil.getFacilityCodeFromToken(token);
+    }
+
+    private boolean isVisibleTransitPackage(SortingTotalPackageEntity entity) {
+        if (entity == null) {
+            return false;
+        }
+        if (!SortingConstants.PACKAGE_LEVEL_TRANSIT.equalsIgnoreCase(entity.getPackageLevel())) {
+            return false;
+        }
+        return StringUtils.hasText(entity.getPackageNo()) && entity.getPackageNo().matches("^B\\d{21}$");
+    }
+
     private String resolveIdempotencyKey(String key, String packageNo, String itemNo) {
         return StringUtils.hasText(key) ? key.trim() + ":" + packageNo + ":" + itemNo : packageNo + ":" + itemNo;
     }
@@ -595,6 +755,101 @@ public class SortingServiceImpl implements SortingService {
         response.setOpenedAt(entity.getOpenedAt());
         response.setTerminalReason(entity.getTerminalReason());
         return response;
+    }
+
+    private List<com.liana.post.oms.model.dto.MailResponse> loadInternationalMails(String stationCode) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client == null) {
+            return List.of();
+        }
+        com.liana.post.common.model.Result<List<com.liana.post.oms.model.dto.MailResponse>> result = client.listMails();
+        if (result == null || result.getData() == null) {
+            return List.of();
+        }
+        return result.getData().stream()
+                .filter(mail -> mail != null)
+                .filter(mail -> StringUtils.hasText(mail.getCurrentFacilityCode()))
+                .filter(mail -> !StringUtils.hasText(stationCode) || stationCode.equalsIgnoreCase(mail.getCurrentFacilityCode()))
+                .filter(mail -> "INTERNATIONAL".equalsIgnoreCase(mail.getMailScope()))
+                .filter(mail -> com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_SORTED.equals(mail.getStatus())
+                        || com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus())
+                        || com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_CREATED.equals(mail.getStatus()))
+                .filter(mail -> !StringUtils.hasText(mail.getPackageId()))
+                .toList();
+    }
+
+    private Map<String, String> loadCountryNames(Set<String> countryCodes) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client == null || countryCodes == null || countryCodes.isEmpty()) {
+            return Map.of();
+        }
+        com.liana.post.common.model.Result<List<com.liana.post.oms.model.dto.CountryResponse>> result = client.listCountries();
+        if (result == null || result.getData() == null) {
+            return countryCodes.stream().collect(Collectors.toMap(code -> code, code -> code, (a, b) -> a, java.util.LinkedHashMap::new));
+        }
+        Map<String, String> names = result.getData().stream()
+                .filter(country -> country != null && StringUtils.hasText(country.getCode()))
+                .collect(Collectors.toMap(
+                        country -> country.getCode().trim().toUpperCase(),
+                        country -> StringUtils.hasText(country.getName()) ? country.getName() : country.getCode(),
+                        (a, b) -> a,
+                        java.util.LinkedHashMap::new));
+        for (String code : countryCodes) {
+            names.putIfAbsent(code, code);
+        }
+        return names;
+    }
+
+    private CountrySlotSummaryResponse toCountrySlotSummary(String countryCode, String countryName, List<com.liana.post.oms.model.dto.MailResponse> mails) {
+        CountrySlotSummaryResponse response = new CountrySlotSummaryResponse();
+        response.setCountryCode(countryCode);
+        response.setCountryName(StringUtils.hasText(countryName) ? countryName : countryCode);
+        response.setPendingCount(mails == null ? 0 : mails.size());
+        List<String> preview = mails == null ? List.of() : mails.stream()
+                .map(com.liana.post.oms.model.dto.MailResponse::getWaybillNo)
+                .filter(StringUtils::hasText)
+                .limit(5)
+                .toList();
+        response.setPreviewItemNos(preview);
+        response.setPreviewItemNo(preview.isEmpty() ? null : preview.get(0));
+        response.setBagStatus(SortingConstants.PACKAGE_STATUS_RAW);
+        response.setExportFacilityCode(resolveExportFacilityCode(countryCode));
+        response.setRouteCode(countryCode + "-EXPORT");
+        return response;
+    }
+
+    private void updateMailRouteToCountry(String waybillNo, String countryCode, String exportFacilityCode, String stationCode) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client == null) {
+            return;
+        }
+        com.liana.post.oms.model.dto.MailRouteAssignRequest request = new com.liana.post.oms.model.dto.MailRouteAssignRequest();
+        request.setCurrentSlot(countryCode);
+        request.setDestinationNode(exportFacilityCode);
+        request.setCurrentFacilityCode(stationCode);
+        request.setStatus(com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_SORTED);
+        client.updateMailRoute(waybillNo, request);
+    }
+
+    private String resolveExportFacilityCode(String countryCode) {
+        return "A2";
+    }
+
+    private String resolveCountrySlotKey(com.liana.post.oms.model.dto.MailResponse mail) {
+        if (mail == null) {
+            return "";
+        }
+        if (StringUtils.hasText(mail.getCurrentSlot())) {
+            return normalizeCountryCode(mail.getCurrentSlot());
+        }
+        return normalizeCountryCode(mail.getDestCountryCode());
+    }
+
+    private String normalizeCountryCode(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.trim().toUpperCase();
     }
 
     private SortingLineResponse toLineResponse(PackageItemLineEntity entity) {

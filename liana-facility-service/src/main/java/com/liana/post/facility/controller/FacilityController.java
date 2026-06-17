@@ -22,17 +22,17 @@ public class FacilityController {
     @GetMapping("/types")
     public Result<List<FacilityTypeEntity>> listFacilityTypes() { return Result.ok(facilityService.listFacilityTypes()); }
     @GetMapping("/types/{code}")
-    public Result<FacilityTypeEntity> getFacilityType(@PathVariable String code) { return Result.ok(facilityService.getFacilityType(code)); }
+    public Result<FacilityTypeEntity> getFacilityType(@PathVariable("code") String code) { return Result.ok(facilityService.getFacilityType(code)); }
     @PostMapping
     public Result<FacilityEntity> createFacility(@Valid @RequestBody FacilityCreateRequest request) { return Result.ok(facilityService.createFacility(request)); }
     @GetMapping
     public Result<List<FacilityEntity>> listFacilities() { return Result.ok(facilityService.listFacilities()); }
     @GetMapping("/{facilityCode}")
-    public Result<FacilityEntity> getFacility(@PathVariable String facilityCode) { return Result.ok(facilityService.getFacility(facilityCode)); }
+    public Result<FacilityEntity> getFacility(@PathVariable("facilityCode") String facilityCode) { return Result.ok(facilityService.getFacility(facilityCode)); }
     @PostMapping("/routes")
     public Result<FacilityRouteEntity> createRoute(@Valid @RequestBody FacilityRouteCreateRequest request) { return Result.ok(facilityService.createRoute(request)); }
     @GetMapping("/routes")
     public Result<List<FacilityRouteEntity>> listRoutes() { return Result.ok(facilityService.listRoutes()); }
     @GetMapping("/routes/{routeCode}")
-    public Result<FacilityRouteEntity> getRoute(@PathVariable String routeCode) { return Result.ok(facilityService.getRoute(routeCode)); }
+    public Result<FacilityRouteEntity> getRoute(@PathVariable("routeCode") String routeCode) { return Result.ok(facilityService.getRoute(routeCode)); }
 }

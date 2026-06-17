@@ -14,6 +14,8 @@ public class DispatchBagCreateRequest {
     private String mailTypeCode;
     @NotEmpty
     private List<String> mailNoList;
+    private String destCountryCode;
+    private String actionMode;
 
     public String getOriginFacilityCode() { return originFacilityCode; }
     public void setOriginFacilityCode(String originFacilityCode) { this.originFacilityCode = originFacilityCode; }
@@ -25,4 +27,8 @@ public class DispatchBagCreateRequest {
     public void setMailTypeCode(String mailTypeCode) { this.mailTypeCode = mailTypeCode; }
     public List<String> getMailNoList() { return mailNoList; }
     public void setMailNoList(List<String> mailNoList) { this.mailNoList = mailNoList; }
+    public String getDestCountryCode() { return destCountryCode; }
+    public void setDestCountryCode(String destCountryCode) { this.destCountryCode = destCountryCode; }
+    public String getActionMode() { return actionMode; }
+    public void setActionMode(String actionMode) { this.actionMode = actionMode; }
 }

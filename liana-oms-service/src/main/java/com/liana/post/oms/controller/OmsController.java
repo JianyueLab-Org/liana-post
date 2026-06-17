@@ -7,7 +7,13 @@ import com.liana.post.common.model.Result;
 import com.liana.post.oms.model.dto.CountryResponse;
 import com.liana.post.oms.model.dto.MailBagAssignRequest;
 import com.liana.post.oms.model.dto.MailCreateRequest;
+import com.liana.post.oms.model.dto.MailPackageActionRequest;
+import com.liana.post.oms.model.dto.MailPackageSummaryResponse;
+import com.liana.post.oms.model.dto.MailRouteAssignRequest;
 import com.liana.post.oms.model.dto.MailResponse;
+import com.liana.post.oms.model.dto.MailSlotSealRequest;
+import com.liana.post.oms.model.dto.MailSlotSealResponse;
+import com.liana.post.oms.model.dto.MailSlotSummaryResponse;
 import com.liana.post.oms.model.dto.MailStatusUpdateRequest;
 import com.liana.post.oms.model.dto.MailTypeResponse;
 import com.liana.post.oms.model.dto.ServiceTypeResponse;
@@ -63,6 +69,16 @@ public class OmsController {
         return Result.ok(omsService.listMails());
     }
 
+    @GetMapping("/packages")
+    public Result<List<MailPackageSummaryResponse>> listPackages() {
+        return Result.ok(omsService.listPackages());
+    }
+
+    @GetMapping("/packages/pending-delivery")
+    public Result<List<MailResponse>> listPendingDeliveryMails(@RequestParam(name = "currentFacilityCode", required = false) String currentFacilityCode) {
+        return Result.ok(omsService.listPendingDeliveryMails(currentFacilityCode));
+    }
+
     @GetMapping("/mails/status/{status}")
     public Result<List<MailResponse>> listMailsByStatus(@PathVariable("status") String status) {
         return Result.ok(omsService.listMailsByStatus(status));
@@ -86,6 +102,36 @@ public class OmsController {
     @PostMapping("/mails/{waybillNo}/bag")
     public Result<MailResponse> assignMailBag(@PathVariable("waybillNo") String waybillNo, @Valid @RequestBody MailBagAssignRequest request) {
         return Result.ok(omsService.assignMailBag(waybillNo, request));
+    }
+
+    @PostMapping("/mails/{waybillNo}/route")
+    public Result<MailResponse> updateMailRoute(@PathVariable("waybillNo") String waybillNo, @Valid @RequestBody MailRouteAssignRequest request) {
+        return Result.ok(omsService.updateMailRoute(waybillNo, request));
+    }
+
+    @PostMapping("/packages/receive-open")
+    public Result<Integer> receiveAndOpenPackage(@Valid @RequestBody MailPackageActionRequest request) {
+        return Result.ok(omsService.receiveAndOpenMailPackage(request.getPackageId(), request.getCurrentFacilityCode()));
+    }
+
+    @GetMapping("/slots")
+    public Result<List<MailSlotSummaryResponse>> listActiveSlots() {
+        return Result.ok(omsService.listActiveSlots());
+    }
+
+    @PostMapping("/slots/{slotCode}/seal")
+    public Result<MailSlotSealResponse> sealMailSlot(@PathVariable("slotCode") String slotCode, @Valid @RequestBody MailSlotSealRequest request) {
+        return Result.ok(omsService.sealMailSlot(slotCode, request));
+    }
+
+    @PostMapping("/mails/{waybillNo}/deliver")
+    public Result<MailResponse> deliverMail(@PathVariable("waybillNo") String waybillNo, @RequestParam(name = "facilityCode", required = false) String facilityCode) {
+        return Result.ok(omsService.deliverMail(waybillNo, facilityCode));
+    }
+
+    @PostMapping("/mails/{waybillNo}/exchange-depart")
+    public Result<MailResponse> departExchangeMail(@PathVariable("waybillNo") String waybillNo, @RequestParam(name = "facilityCode", required = false) String facilityCode) {
+        return Result.ok(omsService.departExchangeMail(waybillNo, facilityCode));
     }
 
     @GetMapping({"/mail-types", "/types", "/mail-types/list"})

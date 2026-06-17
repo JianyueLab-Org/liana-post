@@ -11,6 +11,9 @@ CREATE TABLE `route_rule` (
   `rule_code` VARCHAR(64) NOT NULL,
   `source_facility_code` VARCHAR(64) NOT NULL,
   `target_facility_code` VARCHAR(64) NOT NULL,
+  `route_scope` VARCHAR(32) NOT NULL DEFAULT 'DOMESTIC',
+  `dest_country_code` VARCHAR(8) DEFAULT NULL,
+  `export_facility_code` VARCHAR(64) DEFAULT NULL,
   `priority_level` INT NOT NULL DEFAULT 0,
   `transport_mode` VARCHAR(32) NOT NULL,
   `enabled` TINYINT NOT NULL DEFAULT 1,
@@ -78,9 +81,12 @@ CREATE TABLE `handoff_record` (
   KEY `idx_handoff_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `route_rule` (`rule_code`, `source_facility_code`, `target_facility_code`, `priority_level`, `transport_mode`, `enabled`) VALUES
-('B1-C1-TRUCK', 'B1', 'C1', 1, 'TRUCK', 1),
-('B1-C1-AIR', 'B1', 'C1', 2, 'AIR', 1);
+INSERT INTO `route_rule` (`rule_code`, `source_facility_code`, `target_facility_code`, `route_scope`, `dest_country_code`, `export_facility_code`, `priority_level`, `transport_mode`, `enabled`) VALUES
+('B1-C1-TRUCK', 'B1', 'C1', 'DOMESTIC', NULL, NULL, 1, 'TRUCK', 1),
+('B1-C1-AIR', 'B1', 'C1', 'DOMESTIC', NULL, NULL, 2, 'AIR', 1),
+('A1-HK-EXPORT', 'A1', 'A2', 'INTERNATIONAL', 'HK', 'A2', 1, 'AIR', 1),
+('A1-JP-EXPORT', 'A1', 'A2', 'INTERNATIONAL', 'JP', 'A2', 1, 'AIR', 1),
+('A1-US-EXPORT', 'A1', 'A2', 'INTERNATIONAL', 'US', 'A2', 1, 'AIR', 1);
 
 INSERT INTO `dispatch_bag` (`bag_no`, `origin_facility_code`, `destination_facility_code`, `route_code`, `transport_task_code`, `mail_no_list`, `mail_type_code`, `status`, `mail_count`, `total_weight_grams`) VALUES
 ('B202606090001', 'B1', 'C1', 'B1-C1-TRUCK', JSON_ARRAY('LYN0000000001LN'), 'R', 'CREATED', 1, 120),

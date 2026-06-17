@@ -40,6 +40,7 @@
       <div class="border-t border-slate-800 px-5 py-4 text-xs text-slate-400">
         <div>{{ user?.displayName || user?.username || '未登录' }}</div>
         <div class="mt-1">{{ user?.facilityCode || '无组织信息' }}</div>
+        <div class="mt-1">{{ session.facilityTypeLabel }}</div>
       </div>
     </aside>
 

@@ -15,13 +15,17 @@ import java.util.List;
 public final class AuthMapper {
     private AuthMapper() {}
 
+    private static String normalizeRoleCode(String code) {
+        return "POSTOFFICE".equals(code) ? AuthConstants.ROLE_CLERK : code;
+    }
+
     public static LoginResponse toLoginResponse(UserEntity user, RoleEntity role, String token) {
         LoginResponse response = new LoginResponse();
         response.setToken(token);
         response.setUserId(user.getId());
         response.setUsername(user.getUsername());
         response.setDisplayName(user.getDisplayName());
-        response.setRole(role == null ? null : role.getCode());
+        response.setRole(role == null ? null : normalizeRoleCode(role.getCode()));
         response.setFacilityCode(user.getFacilityCode());
         return response;
     }
@@ -32,7 +36,7 @@ public final class AuthMapper {
         response.setUsername(user.getUsername());
         response.setDisplayName(user.getDisplayName());
         response.setFacilityCode(user.getFacilityCode());
-        response.setRole(role == null ? AuthConstants.ROLE_CLERK : role.getCode());
+        response.setRole(role == null ? AuthConstants.ROLE_CLERK : normalizeRoleCode(role.getCode()));
         response.setPermissions(permissions == null ? List.of() : permissions.stream().map(PermissionEntity::getCode).toList());
         return response;
     }
@@ -49,7 +53,7 @@ public final class AuthMapper {
         response.setLastLoginAt(user.getLastLoginAt());
         response.setCreatedAt(user.getCreatedAt());
         response.setUpdatedAt(user.getUpdatedAt());
-        response.setRole(role == null ? null : role.getCode());
+        response.setRole(role == null ? null : normalizeRoleCode(role.getCode()));
         response.setPermissions(permissions == null ? List.of() : permissions.stream().map(PermissionEntity::getCode).toList());
         return response;
     }

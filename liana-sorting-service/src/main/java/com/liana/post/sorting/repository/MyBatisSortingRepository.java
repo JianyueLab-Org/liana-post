@@ -14,6 +14,7 @@ import com.liana.post.sorting.model.entity.PackageItemLineEntity;
 import com.liana.post.sorting.model.entity.SortingManifestEntity;
 import com.liana.post.sorting.model.entity.SortingManifestItemEntity;
 import com.liana.post.sorting.model.entity.SortingTotalPackageEntity;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -134,8 +135,17 @@ public class MyBatisSortingRepository implements SortingRepository {
         if (StringUtils.hasText(entity.getIdempotencyKey()) == false) {
             throw new BusinessException(400, "idempotencyKey cannot be blank");
         }
-        if (packageItemLineMapper.insert(entity) <= 0) {
-            throw new BusinessException(500, "failed to save package item line");
+        entity.setIdempotencyKey(entity.getIdempotencyKey().trim());
+        try {
+            if (packageItemLineMapper.insert(entity) <= 0) {
+                throw new BusinessException(500, "failed to save package item line");
+            }
+        } catch (DuplicateKeyException ex) {
+            PackageItemLineEntity existing = findPackageLineByIdempotencyKey(entity.getIdempotencyKey());
+            if (existing != null) {
+                return existing;
+            }
+            throw new BusinessException(409, "package item line already exists");
         }
         return entity;
     }
@@ -158,6 +168,11 @@ public class MyBatisSortingRepository implements SortingRepository {
     @Override
     public List<PackageItemLineEntity> findAllPackageLines() {
         return packageItemLineMapper.selectList(null);
+    }
+
+    private PackageItemLineEntity findPackageLineByIdempotencyKey(String idempotencyKey) {
+        return packageItemLineMapper.selectOne(new LambdaQueryWrapper<PackageItemLineEntity>()
+                .eq(PackageItemLineEntity::getIdempotencyKey, idempotencyKey));
     }
 
     @Override
@@ -183,6 +198,15 @@ public class MyBatisSortingRepository implements SortingRepository {
     public List<PackageItemLineEntity> findLatestLoadLinesBySlot(String slotCode) {
         return packageItemLineMapper.selectList(new LambdaQueryWrapper<PackageItemLineEntity>()
                 .eq(PackageItemLineEntity::getTargetCenterCode, normalize(slotCode))
+                .eq(PackageItemLineEntity::getActionType, SortingConstants.LINE_ACTION_LOAD)
+                .orderByDesc(PackageItemLineEntity::getEventTime));
+    }
+
+    @Override
+    public List<PackageItemLineEntity> findLatestLoadLinesByCountry(String countryCode) {
+        String normalized = normalize(countryCode);
+        return packageItemLineMapper.selectList(new LambdaQueryWrapper<PackageItemLineEntity>()
+                .likeRight(PackageItemLineEntity::getTargetCenterCode, normalized + "-")
                 .eq(PackageItemLineEntity::getActionType, SortingConstants.LINE_ACTION_LOAD)
                 .orderByDesc(PackageItemLineEntity::getEventTime));
     }

@@ -14,7 +14,9 @@ public interface SortingService {
     SortingPackageResponse reBag(SortingRebagRequest request);
     List<SortingSlotSummaryResponse> listSlotSummaries(String stationCode);
     SortingPackageResponse sealBagBySlot(String slotCode, String stationCode, String operatorId);
-    List<SortingPackageResponse> listPackages();
+    List<CountrySlotSummaryResponse> listCountrySlotSummaries(String stationCode);
+    List<SortingPackageResponse> sealCountrySlot(CountrySlotBulkRequest request);
+    List<SortingPackageResponse> listPackages(String authorization);
     List<SortingManifestResponse> listManifests();
     SortingManifestDetailResponse getManifestDetail(String manifestNo);
     List<SortingLineResponse> listLines(String packageNo);

@@ -17,6 +17,7 @@ public interface DispatchRepository {
     HandoffRecordEntity saveHandoffRecord(HandoffRecordEntity entity);
     Optional<RouteRuleEntity> findRouteRuleByCode(String ruleCode);
     Optional<RouteRuleEntity> findBestRouteRule(String sourceFacilityCode, String targetFacilityCode);
+    Optional<RouteRuleEntity> findBestRouteRule(String sourceFacilityCode, String targetFacilityCode, String routeScope, String destCountryCode);
     Optional<DispatchBagEntity> findDispatchBagById(Long id);
     Optional<DispatchBagEntity> findDispatchBagByBagNo(String bagNo);
     DispatchBagEntity linkTransportTask(Long id, String transportTaskCode);

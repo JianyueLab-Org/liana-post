@@ -1,8 +1,11 @@
 package com.liana.post.oms.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liana.post.common.constant.LogisticsConstants;
 import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.util.UpuBarcodeUtil;
 import com.liana.post.oms.mapper.CountryMapper;
 import com.liana.post.oms.mapper.CountryServiceTypeMapper;
 import com.liana.post.oms.mapper.MailMapper;
@@ -10,6 +13,9 @@ import com.liana.post.oms.mapper.MailTypeMapper;
 import com.liana.post.oms.mapper.RecipientMapper;
 import com.liana.post.oms.mapper.SenderMapper;
 import com.liana.post.oms.mapper.ServiceTypeMapper;
+import com.liana.post.oms.model.dto.MailPackageSummaryResponse;
+import com.liana.post.oms.model.dto.MailSlotSealResponse;
+import com.liana.post.oms.model.dto.MailSlotSummaryResponse;
 import com.liana.post.oms.model.entity.CountryEntity;
 import com.liana.post.oms.model.entity.CountryServiceTypeEntity;
 import com.liana.post.oms.model.entity.MailEntity;
@@ -19,11 +25,16 @@ import com.liana.post.oms.model.entity.SenderEntity;
 import com.liana.post.oms.model.entity.ServiceTypeEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @Repository
 public class MyBatisOmsRepository implements OmsRepository {
@@ -69,7 +80,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     public SenderEntity saveSender(SenderEntity entity) {
         entity.setCountryCode(normalizeCountry(entity.getCountryCode()));
         stamp(entity);
-        if (senderMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert sender");
+        if (senderMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert sender");
+        }
         return entity;
     }
 
@@ -78,7 +91,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     public RecipientEntity saveRecipient(RecipientEntity entity) {
         entity.setCountryCode(normalizeCountry(entity.getCountryCode()));
         stamp(entity);
-        if (recipientMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert recipient");
+        if (recipientMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert recipient");
+        }
         return entity;
     }
 
@@ -86,7 +101,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Transactional
     public MailTypeEntity saveMailType(MailTypeEntity entity) {
         stamp(entity);
-        if (mailTypeMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert mail type");
+        if (mailTypeMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert mail type");
+        }
         return entity;
     }
 
@@ -94,7 +111,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Transactional
     public CountryEntity saveCountry(CountryEntity entity) {
         stamp(entity);
-        if (countryMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert country");
+        if (countryMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert country");
+        }
         return entity;
     }
 
@@ -102,7 +121,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Transactional
     public ServiceTypeEntity saveServiceType(ServiceTypeEntity entity) {
         stamp(entity);
-        if (serviceTypeMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert service type");
+        if (serviceTypeMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert service type");
+        }
         return entity;
     }
 
@@ -110,7 +131,9 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Transactional
     public CountryServiceTypeEntity saveCountryServiceType(CountryServiceTypeEntity entity) {
         stamp(entity);
-        if (countryServiceTypeMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert country service type");
+        if (countryServiceTypeMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert country service type");
+        }
         return entity;
     }
 
@@ -120,17 +143,25 @@ public class MyBatisOmsRepository implements OmsRepository {
         entity.setMailScope(normalizeMailScope(entity.getMailScope()));
         entity.setServiceType(normalizeServiceType(entity.getServiceType()));
         entity.setDestCountryCode(normalizeDestCountryCode(entity.getMailScope(), entity.getDestCountryCode()));
-        if (entity.getStatus() == null || entity.getStatus().isBlank()) {
+        if (!StringUtils.hasText(entity.getWaybillNo())) {
+            entity.setWaybillNo(UpuBarcodeUtil.generateRandom("CP"));
+        }
+        if (!StringUtils.hasText(entity.getStatus())) {
             entity.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
+        } else {
+            entity.setStatus(normalizeStatus(entity.getStatus()));
         }
         stamp(entity);
-        if (mailMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to insert mail");
+        if (mailMapper.insert(entity) <= 0) {
+            throw new BusinessException(500, "failed to insert mail");
+        }
         return entity;
     }
 
     @Override
     public Optional<MailEntity> findMailByWaybillNo(String waybillNo) {
-        return Optional.ofNullable(mailMapper.selectOne(new LambdaQueryWrapper<MailEntity>().eq(MailEntity::getWaybillNo, normalize(waybillNo))));
+        return Optional.ofNullable(mailMapper.selectOne(new LambdaQueryWrapper<MailEntity>()
+                .eq(MailEntity::getWaybillNo, normalize(waybillNo))));
     }
 
     @Override
@@ -145,17 +176,20 @@ public class MyBatisOmsRepository implements OmsRepository {
 
     @Override
     public List<MailEntity> findMailsByStatus(String status) {
-        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>().eq(MailEntity::getStatus, normalize(status)));
+        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>()
+                .eq(MailEntity::getStatus, normalize(status)));
     }
 
     @Override
     public List<MailEntity> findMailsByWaybillNos(List<String> waybillNos) {
-        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>().in(MailEntity::getWaybillNo, waybillNos));
+        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>()
+                .in(MailEntity::getWaybillNo, waybillNos));
     }
 
     @Override
     public Optional<MailTypeEntity> findMailTypeByCode(String code) {
-        return Optional.ofNullable(mailTypeMapper.selectOne(new LambdaQueryWrapper<MailTypeEntity>().eq(MailTypeEntity::getCode, normalize(code))));
+        return Optional.ofNullable(mailTypeMapper.selectOne(new LambdaQueryWrapper<MailTypeEntity>()
+                .eq(MailTypeEntity::getCode, normalize(code))));
     }
 
     @Override
@@ -165,7 +199,8 @@ public class MyBatisOmsRepository implements OmsRepository {
 
     @Override
     public Optional<CountryEntity> findCountryByCode(String code) {
-        return Optional.ofNullable(countryMapper.selectOne(new LambdaQueryWrapper<CountryEntity>().eq(CountryEntity::getCode, normalize(code))));
+        return Optional.ofNullable(countryMapper.selectOne(new LambdaQueryWrapper<CountryEntity>()
+                .eq(CountryEntity::getCode, normalize(code))));
     }
 
     @Override
@@ -175,7 +210,8 @@ public class MyBatisOmsRepository implements OmsRepository {
 
     @Override
     public Optional<ServiceTypeEntity> findServiceTypeByCode(String code) {
-        return Optional.ofNullable(serviceTypeMapper.selectOne(new LambdaQueryWrapper<ServiceTypeEntity>().eq(ServiceTypeEntity::getCode, normalize(code))));
+        return Optional.ofNullable(serviceTypeMapper.selectOne(new LambdaQueryWrapper<ServiceTypeEntity>()
+                .eq(ServiceTypeEntity::getCode, normalize(code))));
     }
 
     @Override
@@ -187,8 +223,8 @@ public class MyBatisOmsRepository implements OmsRepository {
     public List<ServiceTypeEntity> findServiceTypesByCountryCode(String countryCode) {
         String normalizedCountryCode = normalize(countryCode);
         List<String> serviceCodes = countryServiceTypeMapper.selectList(new LambdaQueryWrapper<CountryServiceTypeEntity>()
-                .eq(CountryServiceTypeEntity::getCountryCode, normalizedCountryCode)
-                .eq(CountryServiceTypeEntity::getEnabled, 1))
+                        .eq(CountryServiceTypeEntity::getCountryCode, normalizedCountryCode)
+                        .eq(CountryServiceTypeEntity::getEnabled, 1))
                 .stream()
                 .map(CountryServiceTypeEntity::getServiceTypeCode)
                 .toList();
@@ -212,34 +248,123 @@ public class MyBatisOmsRepository implements OmsRepository {
     }
 
     @Override
+    public List<MailPackageSummaryResponse> findPackageSummaries() {
+        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>()
+                        .isNotNull(MailEntity::getPackageId))
+                .stream()
+                .collect(Collectors.groupingBy(mail -> mail.getPackageId().trim().toUpperCase(), LinkedHashMap::new, Collectors.toList()))
+                .entrySet()
+                .stream()
+                .map(entry -> toPackageSummary(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(MailPackageSummaryResponse::getLatestUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .toList();
+    }
+
+    @Override
+    public List<MailEntity> findMailsByPackageId(String packageId) {
+        return mailMapper.selectList(new LambdaQueryWrapper<MailEntity>()
+                .eq(MailEntity::getPackageId, normalize(packageId)));
+    }
+
+    @Override
+    public List<MailEntity> findPendingDeliveryMails(String currentFacilityCode) {
+        LambdaQueryWrapper<MailEntity> wrapper = new LambdaQueryWrapper<MailEntity>()
+                .in(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_ARRIVED, LogisticsConstants.MAIL_STATUS_SORTED, LogisticsConstants.MAIL_STATUS_DISPATCHED)
+                .orderByDesc(MailEntity::getUpdatedAt);
+        if (StringUtils.hasText(currentFacilityCode)) {
+            wrapper.eq(MailEntity::getCurrentFacilityCode, currentFacilityCode.trim().toUpperCase());
+        }
+        return mailMapper.selectList(wrapper);
+    }
+
+    @Override
     @Transactional
     public MailEntity updateMailStatus(String waybillNo, String status, String currentFacilityCode) {
         MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
         mail.setStatus(normalizeStatus(status));
-        if (currentFacilityCode != null && !currentFacilityCode.isBlank()) {
-            mail.setCurrentFacilityCode(currentFacilityCode.trim());
+        if (StringUtils.hasText(currentFacilityCode)) {
+            mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
         }
         mail.setUpdatedAt(LocalDateTime.now());
-        if (mailMapper.updateById(mail) <= 0) throw new BusinessException(500, "failed to update mail status");
+        if (mailMapper.updateById(mail) <= 0) {
+            throw new BusinessException(500, "failed to update mail status");
+        }
         return mail;
+    }
+
+    @Override
+    @Transactional
+    public int receiveMailPackage(String packageId, String currentFacilityCode) {
+        String normalizedPackageId = normalize(packageId);
+        List<MailEntity> mails = findMailsByPackageId(normalizedPackageId);
+        if (mails.isEmpty()) {
+            throw new BusinessException(404, "package not found: " + normalizedPackageId);
+        }
+        int updated = 0;
+        for (MailEntity mail : mails) {
+            if (StringUtils.hasText(currentFacilityCode)) {
+                mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+            }
+            mail.setStatus(LogisticsConstants.MAIL_STATUS_ARRIVED);
+            mail.setUpdatedAt(LocalDateTime.now());
+            if (mailMapper.updateById(mail) > 0) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public int openMailPackage(String packageId, String currentFacilityCode) {
+        String normalizedPackageId = normalize(packageId);
+        List<MailEntity> mails = findMailsByPackageId(normalizedPackageId);
+        if (mails.isEmpty()) {
+            throw new BusinessException(404, "package not found: " + normalizedPackageId);
+        }
+        int updated = 0;
+        for (MailEntity mail : mails) {
+            mail.setPackageId(null);
+            mail.setBagNo(null);
+            if (StringUtils.hasText(currentFacilityCode)) {
+                mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+            }
+            mail.setCurrentSlot(null);
+            mail.setStatus(LogisticsConstants.MAIL_STATUS_SORTED);
+            mail.setUpdatedAt(LocalDateTime.now());
+            if (mailMapper.updateById(mail) > 0) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public int receiveAndOpenMailPackage(String packageId, String currentFacilityCode) {
+        int received = receiveMailPackage(packageId, currentFacilityCode);
+        int opened = openMailPackage(packageId, currentFacilityCode);
+        return Math.max(received, opened);
     }
 
     @Override
     @Transactional
     public MailEntity assignMailBag(String waybillNo, String bagNo, String currentFacilityCode) {
         MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
-        if (bagNo != null && !bagNo.isBlank()) {
+        if (StringUtils.hasText(bagNo)) {
             mail.setBagNo(bagNo.trim());
             mail.setStatus(LogisticsConstants.MAIL_STATUS_DISPATCHED);
         } else {
             mail.setBagNo(null);
             mail.setStatus(LogisticsConstants.MAIL_STATUS_SORTED);
         }
-        if (currentFacilityCode != null && !currentFacilityCode.isBlank()) {
-            mail.setCurrentFacilityCode(currentFacilityCode.trim());
+        if (StringUtils.hasText(currentFacilityCode)) {
+            mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
         }
         mail.setUpdatedAt(LocalDateTime.now());
-        if (mailMapper.updateById(mail) <= 0) throw new BusinessException(500, "failed to assign mail bag");
+        if (mailMapper.updateById(mail) <= 0) {
+            throw new BusinessException(500, "failed to assign mail bag");
+        }
         return mail;
     }
 
@@ -252,6 +377,82 @@ public class MyBatisOmsRepository implements OmsRepository {
             updated++;
         }
         return updated;
+    }
+
+    @Override
+    @Transactional
+    public MailEntity assignMailSlot(String waybillNo, String slotCode, String destinationNode, String currentFacilityCode, String status) {
+        MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
+        mail.setCurrentSlot(normalizeSlot(slotCode));
+        mail.setDestinationNode(StringUtils.hasText(destinationNode) ? destinationNode.trim() : null);
+        if (StringUtils.hasText(currentFacilityCode)) {
+            mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+        }
+        if (StringUtils.hasText(status)) {
+            mail.setStatus(normalizeStatus(status));
+        }
+        mail.setUpdatedAt(LocalDateTime.now());
+        if (mailMapper.updateById(mail) <= 0) {
+            throw new BusinessException(500, "failed to assign mail slot");
+        }
+        return mail;
+    }
+
+    @Override
+    public List<MailSlotSummaryResponse> findActiveSlots() {
+        List<java.util.Map<String, Object>> rows = mailMapper.selectMaps(new QueryWrapper<MailEntity>()
+                .select("current_slot", "current_facility_code", "COUNT(*) AS pending_count", "MIN(destination_node) AS destination_node")
+                .isNotNull("current_slot")
+                .groupBy("current_slot", "current_facility_code"));
+        return rows.stream().map(row -> {
+            MailSlotSummaryResponse response = new MailSlotSummaryResponse();
+            String slotCode = row.get("current_slot") == null ? null : String.valueOf(row.get("current_slot"));
+            String currentFacilityCode = row.get("current_facility_code") == null ? null : String.valueOf(row.get("current_facility_code"));
+            String destinationNode = row.get("destination_node") == null ? null : String.valueOf(row.get("destination_node"));
+            Integer pendingCount = row.get("pending_count") == null ? 0 : Integer.parseInt(String.valueOf(row.get("pending_count")));
+            response.setSlotCode(slotCode == null ? null : slotCode.trim().toUpperCase());
+            response.setPendingCount(pendingCount);
+            response.setCurrentFacilityCode(currentFacilityCode == null ? null : currentFacilityCode.trim().toUpperCase());
+            response.setDestinationNode(destinationNode);
+            response.setNextHopCode(destinationNode);
+            response.setBagStatus("RAW");
+            response.setPreviewItemNos(List.of());
+            return response;
+        }).toList();
+    }
+
+    @Override
+    @Transactional
+    public MailSlotSealResponse sealMailSlot(String slotCode, String packageId, String destinationNode, String currentFacilityCode, String status) {
+        String normalizedSlot = normalizeSlot(slotCode);
+        String normalizedPackageId = StringUtils.hasText(packageId) ? packageId.trim().toUpperCase() : generatePackageId();
+        String normalizedDestinationNode = StringUtils.hasText(destinationNode) ? destinationNode.trim().toUpperCase() : null;
+        LambdaUpdateWrapper<MailEntity> wrapper = new LambdaUpdateWrapper<MailEntity>()
+                .eq(MailEntity::getCurrentSlot, normalizedSlot)
+                .set(MailEntity::getPackageId, normalizedPackageId)
+                .set(MailEntity::getCurrentSlot, null)
+                .set(MailEntity::getUpdatedAt, LocalDateTime.now());
+        if (normalizedDestinationNode != null) {
+            wrapper.set(MailEntity::getDestinationNode, normalizedDestinationNode);
+        }
+        if (StringUtils.hasText(currentFacilityCode)) {
+            wrapper.set(MailEntity::getCurrentFacilityCode, currentFacilityCode.trim().toUpperCase());
+        }
+        if (StringUtils.hasText(status)) {
+            wrapper.set(MailEntity::getStatus, normalizeStatus(status));
+        }
+
+        int updated = mailMapper.update(null, wrapper);
+        if (updated < 0) {
+            throw new BusinessException(500, "failed to seal slot");
+        }
+
+        MailSlotSealResponse response = new MailSlotSealResponse();
+        response.setSlotCode(normalizedSlot);
+        response.setPackageId(normalizedPackageId);
+        response.setDestinationNode(normalizedDestinationNode);
+        response.setUpdatedCount(updated);
+        return response;
     }
 
     @Override
@@ -270,19 +471,20 @@ public class MyBatisOmsRepository implements OmsRepository {
         if (hasAnyData()) {
             return;
         }
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_PACKAGE, "包裹", "普通包裹", 0));
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_REGISTERED, "挂号信", "挂号信函件", 1));
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_EMS, "EMS", "特快专递", 1));
 
-        saveServiceType(createServiceType("AIR", "航空", "航空运输服务", 1));
-        saveServiceType(createServiceType("SAL", "SAL", "空陆联运服务", 1));
-        saveServiceType(createServiceType("SEA", "海运", "海运运输服务", 1));
+        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_PACKAGE, "PACKAGE", "package mail", 0));
+        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_REGISTERED, "REGISTERED", "registered mail", 1));
+        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_EMS, "EMS", "express mail", 1));
 
-        saveCountry(createCountry("LN", "利亚纳", "Liana", 1, "OCEANIA", "默认本国示例"));
-        saveCountry(createCountry("HK", "中国香港", "Hong Kong", 1, "ASIA_PACIFIC", "UPU示例目的国"));
-        saveCountry(createCountry("JP", "日本", "Japan", 1, "ASIA_PACIFIC", "UPU示例目的国"));
-        saveCountry(createCountry("US", "美国", "United States", 1, "NORTH_AMERICA", "UPU示例目的国"));
-        saveCountry(createCountry("DE", "德国", "Germany", 0, "EUROPE", "示例：当前未通邮"));
+        saveServiceType(createServiceType("AIR", "AIR", "air service", 1));
+        saveServiceType(createServiceType("SAL", "SAL", "surface air lifted", 1));
+        saveServiceType(createServiceType("SEA", "SEA", "sea service", 1));
+
+        saveCountry(createCountry("LN", "Liana", "Liana", 1, "OCEANIA", "default country"));
+        saveCountry(createCountry("HK", "Hong Kong", "Hong Kong", 1, "ASIA_PACIFIC", "postal enabled"));
+        saveCountry(createCountry("JP", "Japan", "Japan", 1, "ASIA_PACIFIC", "postal enabled"));
+        saveCountry(createCountry("US", "United States", "United States", 1, "NORTH_AMERICA", "postal enabled"));
+        saveCountry(createCountry("DE", "Germany", "Germany", 0, "EUROPE", "disabled example"));
 
         linkCountryService("LN", "AIR", 1);
         linkCountryService("LN", "SAL", 1);
@@ -317,18 +519,17 @@ public class MyBatisOmsRepository implements OmsRepository {
         saveRecipient(recipient);
 
         MailEntity mail = new MailEntity();
-        mail.setWaybillNo(com.liana.post.common.util.UpuBarcodeUtil.generateRandom("CP"));
+        mail.setWaybillNo(UpuBarcodeUtil.generateRandom("CP"));
         mail.setMailTypeCode(LogisticsConstants.MAIL_TYPE_REGISTERED);
         mail.setServiceType("AIR");
         mail.setMailScope("DOMESTIC");
-        mail.setDestCountryCode(null);
         mail.setSenderId(sender.getId());
         mail.setRecipientId(recipient.getId());
         mail.setOriginFacilityCode("B1");
         mail.setCurrentFacilityCode("B1");
         mail.setDestFacilityCode("C1");
         mail.setWeightGrams(120);
-        mail.setDeclaredValue(null);
+        mail.setDeclaredValue(BigDecimal.valueOf(0));
         mail.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
         saveMail(mail);
     }
@@ -370,31 +571,62 @@ public class MyBatisOmsRepository implements OmsRepository {
         saveCountryServiceType(entity);
     }
 
-    private void stamp(SenderEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(RecipientEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(MailTypeEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(CountryEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(ServiceTypeEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(CountryServiceTypeEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
-    private void stamp(MailEntity entity) { entity.setCreatedAt(LocalDateTime.now()); entity.setUpdatedAt(LocalDateTime.now()); }
+    private void stamp(SenderEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(RecipientEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(MailTypeEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(CountryEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(ServiceTypeEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(CountryServiceTypeEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void stamp(MailEntity entity) {
+        entity.setCreatedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+    }
 
     private String normalize(String value) {
-        if (value == null || value.isBlank()) throw new BusinessException(400, "code cannot be blank");
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(400, "code cannot be blank");
+        }
         return value.trim().toUpperCase();
     }
 
     private String normalizeStatus(String status) {
         String normalized = normalize(status);
-        if (!ALLOWED_STATUSES.contains(normalized)) throw new BusinessException(400, "unsupported mail status");
+        if (!ALLOWED_STATUSES.contains(normalized)) {
+            throw new BusinessException(400, "unsupported mail status");
+        }
         return normalized;
     }
 
     private String normalizeCountry(String countryCode) {
-        return countryCode == null || countryCode.isBlank() ? "LN" : countryCode.trim().toUpperCase();
+        return StringUtils.hasText(countryCode) ? countryCode.trim().toUpperCase() : "LN";
     }
 
     private String normalizeMailScope(String mailScope) {
-        if (mailScope == null || mailScope.isBlank()) {
+        if (!StringUtils.hasText(mailScope)) {
             return "DOMESTIC";
         }
         String normalized = mailScope.trim().toUpperCase();
@@ -412,17 +644,63 @@ public class MyBatisOmsRepository implements OmsRepository {
         return normalized;
     }
 
+    private String normalizeSlot(String value) {
+        if (!StringUtils.hasText(value)) {
+            throw new BusinessException(400, "slotCode cannot be blank");
+        }
+        return value.trim().toUpperCase();
+    }
+
     private String normalizeDestCountryCode(String mailScope, String destCountryCode) {
         if (!"INTERNATIONAL".equals(normalizeMailScope(mailScope))) {
             return null;
         }
         String normalized = normalize(destCountryCode);
-        if (findCountryByCode(normalized).isEmpty()) {
-            throw new BusinessException(404, "destination country not found: " + normalized);
-        }
-        if (findCountryByCode(normalized).map(CountryEntity::getPostalEnabled).orElse(0) != 1) {
+        CountryEntity country = findCountryByCode(normalized).orElseThrow(() -> new BusinessException(404, "destination country not found: " + normalized));
+        if (!Integer.valueOf(1).equals(country.getPostalEnabled())) {
             throw new BusinessException(400, "destination country is not postal enabled: " + normalized);
         }
         return normalized;
+    }
+
+    private String generatePackageId() {
+        return "BAG_NEW_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
+    private MailPackageSummaryResponse toPackageSummary(String packageId, List<MailEntity> mails) {
+        MailPackageSummaryResponse response = new MailPackageSummaryResponse();
+        response.setPackageId(packageId);
+        response.setMailCount(mails.size());
+        response.setDispatchedCount((int) mails.stream().filter(mail -> LogisticsConstants.MAIL_STATUS_DISPATCHED.equals(mail.getStatus())).count());
+        response.setArrivedCount((int) mails.stream().filter(mail -> LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus())).count());
+        response.setSortedCount((int) mails.stream().filter(mail -> LogisticsConstants.MAIL_STATUS_SORTED.equals(mail.getStatus())).count());
+        response.setDeliveredCount((int) mails.stream().filter(mail -> LogisticsConstants.MAIL_STATUS_DELIVERED.equals(mail.getStatus())).count());
+        response.setOriginFacilityCode(firstText(mails.stream().map(MailEntity::getOriginFacilityCode).toList()));
+        response.setCurrentFacilityCode(firstText(mails.stream().map(MailEntity::getCurrentFacilityCode).toList()));
+        response.setDestinationNode(firstText(mails.stream().map(MailEntity::getDestinationNode).toList()));
+        response.setPackageStatus(resolvePackageStatus(mails));
+        response.setLatestUpdatedAt(mails.stream().map(MailEntity::getUpdatedAt).filter(java.util.Objects::nonNull).max(LocalDateTime::compareTo).orElse(null));
+        response.setPreviewWaybillNos(mails.stream().map(MailEntity::getWaybillNo).filter(StringUtils::hasText).limit(5).toList());
+        return response;
+    }
+
+    private String resolvePackageStatus(List<MailEntity> mails) {
+        if (mails == null || mails.isEmpty()) {
+            return null;
+        }
+        if (mails.stream().anyMatch(mail -> LogisticsConstants.MAIL_STATUS_DELIVERED.equals(mail.getStatus()))) {
+            return LogisticsConstants.MAIL_STATUS_DELIVERED;
+        }
+        if (mails.stream().anyMatch(mail -> LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus()))) {
+            return LogisticsConstants.MAIL_STATUS_ARRIVED;
+        }
+        if (mails.stream().anyMatch(mail -> LogisticsConstants.MAIL_STATUS_DISPATCHED.equals(mail.getStatus()))) {
+            return LogisticsConstants.MAIL_STATUS_DISPATCHED;
+        }
+        return mails.get(0).getStatus();
+    }
+
+    private String firstText(List<String> values) {
+        return values.stream().filter(StringUtils::hasText).findFirst().orElse(null);
     }
 }

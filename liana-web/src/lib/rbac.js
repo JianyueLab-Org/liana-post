@@ -1,21 +1,24 @@
 const ROLE_MENU_RULES = {
   CLERK: {
-    top: ['dashboard', 'mail', 'catalog', 'dispatch', 'tracking'],
+    top: ['dashboard', 'mail', 'catalog', 'dispatch', 'sorting', 'tracking', 'delivery'],
     children: {
       mail: ['MAIL_CREATE', 'MAIL_QUERY'],
       catalog: ['catalog-countries', 'catalog-service-types'],
       dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
+      sorting: ['sorting-unpack', 'sorting-rebag'],
+      delivery: ['delivery-postoffice', 'delivery-postoffice-packages'],
       tracking: ['TRACK_QUERY'],
     },
   },
   MANAGER: {
-    top: ['dashboard', 'mail', 'catalog', 'tracking', 'facility', 'transport'],
+    top: ['dashboard', 'mail', 'catalog', 'tracking', 'facility', 'transport', 'sorting'],
     children: {
       mail: ['MAIL_CREATE', 'MAIL_QUERY'],
       catalog: ['catalog-countries', 'catalog-service-types'],
       tracking: ['TRACK_QUERY'],
       facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
+      sorting: ['sorting-manifests', 'sorting-route'],
     },
   },
   SORTER: {
@@ -33,7 +36,7 @@ const ROLE_MENU_RULES = {
     top: ['dashboard', 'catalog', 'facility', 'transport', 'system', 'sync'],
     children: {
       catalog: ['catalog-countries', 'catalog-service-types'],
-      facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
+      facility: ['facility-admin', 'facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
       system: ['system-users', 'system-roles', 'system-permissions'],
       sync: ['sync-outbox', 'sync-tasks'],
@@ -51,6 +54,17 @@ const MENU_LIBRARY = {
     children: [
       { id: 'mail-create', name: '收寄录入', path: '/mail/create', permission: 'MAIL_CREATE' },
       { id: 'mail-list', name: '邮件台账', path: '/mail/list', permission: 'MAIL_QUERY' },
+    ],
+  },
+  delivery: {
+    id: 'delivery',
+    name: '投递',
+    path: '/delivery/postoffice',
+    kind: 'group',
+    children: [
+      { id: 'delivery-postoffice', name: '投递工作台', path: '/delivery/postoffice' },
+      { id: 'delivery-postoffice-print', name: '打印投递单', path: '/delivery/print' },
+      { id: 'delivery-postoffice-packages', name: '接收总包', path: '/delivery/packages' },
     ],
   },
   catalog: {
@@ -84,7 +98,7 @@ const MENU_LIBRARY = {
       { id: 'sorting-manifests', name: '路单管理', path: '/sorting/manifests' },
       { id: 'sorting-receive', name: '接收勾核', path: '/sorting/receive' },
       { id: 'sorting-unpack', name: '开拆作业', path: '/sorting/unpack' },
-      { id: 'sorting-route', name: '路由计算', path: '/sorting/route' },
+      { id: 'sorting-route', name: '出口处理', path: '/sorting/export' },
       { id: 'sorting-rebag', name: '再次封发', path: '/sorting/rebag' },
     ],
   },
@@ -104,6 +118,7 @@ const MENU_LIBRARY = {
     path: '/facility/offices',
     kind: 'group',
     children: [
+      { id: 'facility-admin', name: '机构管理', path: '/facility/admin' },
       { id: 'facility-offices', name: '网点', path: '/facility/offices' },
       { id: 'facility-hubs', name: '分拣中心', path: '/facility/hubs' },
       { id: 'facility-routes', name: '封发关系管理', path: '/facility/routes' },
@@ -150,8 +165,9 @@ function allowByPermission(permissions = [], permission) {
 }
 
 export function buildMenuTree(profile = {}) {
-  const role = profile.role || 'CLERK';
+  const role = profile.role === 'POSTOFFICE' ? 'CLERK' : (profile.role || 'CLERK');
   const permissions = profile.permissions || [];
+  const facilityTypeCode = profile.facilityTypeCode || '';
   const rule = ROLE_MENU_RULES[role] || ROLE_MENU_RULES.CLERK;
 
   const nodes = [];
@@ -162,7 +178,13 @@ export function buildMenuTree(profile = {}) {
       nodes.push({ ...entry, children: [] });
       continue;
     }
-    const children = entry.children.filter((child) => allowByPermission(permissions, child.permission));
+    const children = entry.children
+      .filter((child) => allowByPermission(permissions, child.permission))
+      .filter((child) => {
+        if (key !== 'sorting') return true;
+        if (facilityTypeCode === 'INTERNATIONAL_GATEWAY') return true;
+        return child.id !== 'sorting-route';
+      });
     if (!children.length) continue;
     nodes.push({ ...entry, children });
   }

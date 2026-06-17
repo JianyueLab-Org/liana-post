@@ -26,6 +26,7 @@ public interface SortingRepository {
     List<SortingTotalPackageEntity> findTotalPackagesByManifest(String manifestNo);
     List<SortingTotalPackageEntity> findTotalPackagesByDestination(String destinationOrgCode);
     List<PackageItemLineEntity> findLatestLoadLinesBySlot(String slotCode);
+    List<PackageItemLineEntity> findLatestLoadLinesByCountry(String countryCode);
     DiscrepancyVerificationEntity saveDiscrepancy(DiscrepancyVerificationEntity entity);
     List<DiscrepancyVerificationEntity> findDiscrepanciesByPackage(String packageNo);
     List<DiscrepancyVerificationEntity> findAllDiscrepancies();

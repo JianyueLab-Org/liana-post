@@ -65,6 +65,7 @@ INSERT INTO `facility_type` (`code`, `name`, `description`) VALUES
 
 INSERT INTO `facility` (`facility_code`, `name`, `type_code`, `parent_facility_code`, `country_code`, `province`, `city`, `address`, `status`) VALUES
 ('A1', 'Liana Prime', 'TRANSFER_CENTER', NULL, 'LN', 'Liana Province', 'Liana City', 'A1主枢纽', 1),
+('A2', 'International Exchange Bureau', 'INTERNATIONAL_GATEWAY', 'A1', 'LN', 'Liana Province', 'Liana City', 'A2国际互换局', 1),
 ('B1', 'Namoa Post Office', 'POST_OFFICE', 'A1', 'LN', 'Liana Province', 'Liana City', 'B1支局', 1),
 ('B2', 'Taviri Post Office', 'POST_OFFICE', 'A1', 'LN', 'Liana Province', 'Liana City', 'B2支局', 1),
 ('B3', 'Kelea Post Office', 'POST_OFFICE', 'A1', 'LN', 'Liana Province', 'Liana City', 'B3支局', 1),
@@ -74,6 +75,8 @@ INSERT INTO `facility` (`facility_code`, `name`, `type_code`, `parent_facility_c
 
 INSERT INTO `facility_route` (`route_code`, `origin_facility_code`, `destination_facility_code`, `transport_mode`, `priority_level`, `status`) VALUES
 ('R-A1-B1', 'A1', 'B1', 'LAND', 0, 1),
+('R-A1-A2', 'A1', 'A2', 'AIR', 0, 1),
+('R-A2-A1', 'A2', 'A1', 'AIR', 0, 1),
 ('R-A1-B2', 'A1', 'B2', 'LAND', 0, 1),
 ('R-A1-B3', 'A1', 'B3', 'LAND', 0, 1),
 ('R-B1-A1', 'B1', 'A1', 'LAND', 0, 1);

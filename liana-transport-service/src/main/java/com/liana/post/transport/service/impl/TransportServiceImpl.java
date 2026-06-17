@@ -394,12 +394,12 @@ public class TransportServiceImpl implements TransportService {
         throw new BusinessException(400, "unsupported task status");
     }
 
-    private long parseFacilityRef(String value) {
+    private String parseFacilityRef(String value) {
         if (!StringUtils.hasText(value)) {
             throw new BusinessException(400, "facility reference is required");
         }
         try {
-            return Long.parseLong(value.trim());
+            return value.trim();
         } catch (NumberFormatException ex) {
             throw new BusinessException(400, "facility reference must be numeric");
         }

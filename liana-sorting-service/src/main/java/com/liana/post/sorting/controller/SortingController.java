@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -64,9 +65,19 @@ public class SortingController {
         return Result.ok(sortingService.sealBagBySlot(payload.get("slotCode"), payload.get("stationCode"), payload.get("operatorId")));
     }
 
+    @GetMapping("/country-slots")
+    public Result<List<CountrySlotSummaryResponse>> listCountrySlots(@RequestParam(name = "stationCode", required = false) String stationCode) {
+        return Result.ok(sortingService.listCountrySlotSummaries(stationCode));
+    }
+
+    @PostMapping("/country-slots/seal")
+    public Result<List<SortingPackageResponse>> sealCountrySlot(@Valid @RequestBody CountrySlotBulkRequest request) {
+        return Result.ok(sortingService.sealCountrySlot(request));
+    }
+
     @GetMapping("/packages")
-    public Result<List<SortingPackageResponse>> listPackages() {
-        return Result.ok(sortingService.listPackages());
+    public Result<List<SortingPackageResponse>> listPackages(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        return Result.ok(sortingService.listPackages(authorization));
     }
 
     @GetMapping("/manifests")

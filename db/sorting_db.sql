@@ -1,0 +1,241 @@
+/*
+ Navicat Premium Data Transfer
+
+ Source Server         : localhost
+ Source Server Type    : MySQL
+ Source Server Version : 80040
+ Source Host           : localhost:3306
+ Source Schema         : sorting_db
+
+ Target Server Type    : MySQL
+ Target Server Version : 80040
+ File Encoding         : 65001
+
+ Date: 17/06/2026 08:32:23
+*/
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------
+-- Table structure for discrepancy_verification
+-- ----------------------------
+DROP TABLE IF EXISTS `discrepancy_verification`;
+CREATE TABLE `discrepancy_verification`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `verification_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `manifest_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `item_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `discrepancy_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `discrepancy_source` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expected_qty` int NOT NULL DEFAULT 0,
+  `actual_qty` int NOT NULL DEFAULT 0,
+  `exception_level` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'NORMAL',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OPEN',
+  `evidence` json NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `resolved_at` datetime NULL DEFAULT NULL,
+  `resolver_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `remark` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_discrepancy_verification_no`(`verification_no` ASC) USING BTREE,
+  INDEX `idx_dv_manifest`(`manifest_no` ASC, `discrepancy_type` ASC, `status` ASC) USING BTREE,
+  INDEX `idx_dv_package`(`package_no` ASC, `status` ASC) USING BTREE,
+  INDEX `idx_dv_item`(`item_no` ASC, `status` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of discrepancy_verification
+-- ----------------------------
+INSERT INTO `discrepancy_verification` VALUES (1, 'DV202606142124082855208', 'B202606142113545173520', 'B202606142113545173520', 'CP410839784LN', 'MISSING', 'MANIFEST', 1, 0, 'NORMAL', 'OPEN', NULL, '2026-06-14 21:24:08', NULL, NULL, NULL);
+INSERT INTO `discrepancy_verification` VALUES (2, 'DV202606142124082922661', 'B202606142113545173520', 'B202606142113545173520', 'CP832332893LN', 'MISSING', 'MANIFEST', 1, 0, 'NORMAL', 'OPEN', NULL, '2026-06-14 21:24:08', NULL, NULL, NULL);
+INSERT INTO `discrepancy_verification` VALUES (3, 'DV202606142124082947433', 'B202606142113545173520', 'B202606142113545173520', 'CP863155717LN', 'MISSING', 'MANIFEST', 1, 0, 'NORMAL', 'OPEN', NULL, '2026-06-14 21:24:08', NULL, NULL, NULL);
+INSERT INTO `discrepancy_verification` VALUES (4, 'DV202606142124082952884', 'B202606142113545173520', 'B202606142113545173520', 'CP937723240LN', 'MISSING', 'MANIFEST', 1, 0, 'NORMAL', 'OPEN', NULL, '2026-06-14 21:24:08', NULL, NULL, NULL);
+INSERT INTO `discrepancy_verification` VALUES (5, 'DV202606151527029422203', 'B202606151433205272575 ', 'B202606151433205272575', 'CP349675885LN', 'SURPLUS', 'MANIFEST', 0, 1, 'NORMAL', 'OPEN', NULL, '2026-06-15 15:27:03', NULL, NULL, NULL);
+INSERT INTO `discrepancy_verification` VALUES (6, 'DV202606151528420287436', 'B202606151527463283597', 'B202606151527463283597', 'CP349675885LN', 'SURPLUS', 'MANIFEST', 0, 1, 'NORMAL', 'OPEN', NULL, '2026-06-15 15:28:42', NULL, NULL, NULL);
+
+-- ----------------------------
+-- Table structure for package_item_line
+-- ----------------------------
+DROP TABLE IF EXISTS `package_item_line`;
+CREATE TABLE `package_item_line`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `biz_line_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `idempotency_key` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `scan_mode` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `from_package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `to_package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `parent_line_id` bigint NULL DEFAULT NULL,
+  `manifest_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `scan_batch_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `station_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_center_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `target_center_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `operator_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `device_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `event_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `line_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'VALID',
+  `ext` json NULL,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_package_item_line_biz`(`biz_line_no` ASC) USING BTREE,
+  UNIQUE INDEX `uk_package_item_line_idem`(`idempotency_key` ASC) USING BTREE,
+  INDEX `idx_pil_item_time`(`item_no` ASC, `event_time` ASC) USING BTREE,
+  INDEX `idx_pil_from_pkg`(`from_package_no` ASC, `event_time` ASC) USING BTREE,
+  INDEX `idx_pil_to_pkg`(`to_package_no` ASC, `event_time` ASC) USING BTREE,
+  INDEX `idx_pil_manifest`(`manifest_no` ASC, `event_time` ASC) USING BTREE,
+  INDEX `idx_pil_scan_batch`(`scan_batch_no` ASC, `event_time` ASC) USING BTREE,
+  INDEX `idx_pil_station_time`(`station_code` ASC, `event_time` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 30 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of package_item_line
+-- ----------------------------
+INSERT INTO `package_item_line` VALUES (1, 'PIL202606142124078935417', 'unpack-1781443447842:B202606142113545173520:CP589971586LN', 'CP589971586LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606142113545173520', NULL, NULL, 'B202606142113545173520', 'BATCH-1781443447842', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-14 21:24:08', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (2, 'PIL202606142305169789460', 'unpack-1781449516888:B202606142257385910126	:CP410792509LN', 'CP410792509LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606142257385910126	', NULL, NULL, 'B202606142257385910126	', 'BATCH-1781449516888', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-14 23:05:17', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (3, 'PIL202606142305175349210', 'unpack-1781449516888:B202606142257385910126	:CP181462670LN', 'CP181462670LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606142257385910126	', NULL, NULL, 'B202606142257385910126	', 'BATCH-1781449516888', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-14 23:05:18', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (4, 'PIL202606151240318955010', 'unpack-1781498431813:B202606151239221266281:CP108284632LN', 'CP108284632LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606151239221266281', NULL, NULL, 'B202606151239221266281', 'BATCH-1781498431813', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-15 12:40:32', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (5, 'PIL202606151240322742114', 'unpack-1781498431813:B202606151239221266281:CP575712238LN', 'CP575712238LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606151239221266281', NULL, NULL, 'B202606151239221266281', 'BATCH-1781498431813', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-15 12:40:32', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (6, 'PIL202606151240456134976', 'route-scan-1781498445573:B2:CP575712238LN', 'CP575712238LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'B2', NULL, NULL, NULL, 'A1', NULL, 'B2', '3', 'SCAN-GUN-STUB', '2026-06-15 12:40:46', 'VALID', '{\"nextHop\": \"B2\", \"securityStatus\": \"PASS\"}');
+INSERT INTO `package_item_line` VALUES (7, 'PIL202606151240562498602', 'route-scan-1781498456213:B2:CP108284632LN', 'CP108284632LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'B2', NULL, NULL, NULL, 'A1', NULL, 'B2', '3', 'SCAN-GUN-STUB', '2026-06-15 12:40:56', 'VALID', '{\"nextHop\": \"B2\", \"securityStatus\": \"PASS\"}');
+INSERT INTO `package_item_line` VALUES (8, 'PIL202606151241008851315', 'route-scan-1781498460847:B2:CP575712238LN', 'CP575712238LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'B2', NULL, NULL, NULL, 'A1', NULL, 'B2', '3', 'SCAN-GUN-STUB', '2026-06-15 12:41:01', 'VALID', '{\"nextHop\": \"B2\", \"securityStatus\": \"PASS\"}');
+INSERT INTO `package_item_line` VALUES (18, 'PIL202606151304225904234', 'B202606151304225858768:B2:CP575712238LN', 'CP575712238LN', 'LOAD', 'REBAG', 'BLIND', NULL, 'B202606151304225858768', NULL, NULL, NULL, 'A1', NULL, 'B2', '3', NULL, '2026-06-15 13:04:23', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (19, 'PIL202606151304227877779', 'B202606151304225858768:B2:CP108284632LN', 'CP108284632LN', 'LOAD', 'REBAG', 'BLIND', NULL, 'B202606151304225858768', NULL, NULL, NULL, 'A1', NULL, 'B2', '3', NULL, '2026-06-15 13:04:23', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (21, 'PIL202606151424130890406', 'unpack-1781504653042-1:B202606151419192235333:CP349675885LN', 'CP349675885LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606151419192235333', NULL, NULL, 'B202606151419192235333', 'BATCH-1781504653042-1', 'A1', NULL, NULL, '3', 'WEB-UI', '2026-06-15 14:24:13', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (22, 'PIL202606151424214032764', 'route-scan-1781504661366-1:A2:CP349675885LN', 'CP349675885LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'A2', NULL, NULL, NULL, 'A1', NULL, 'A2', '3', 'SCAN-GUN-STUB', '2026-06-15 14:24:21', 'VALID', '{\"nextHop\": \"A2\", \"securityStatus\": \"PASS\"}');
+INSERT INTO `package_item_line` VALUES (23, 'PIL202606151433205291355', 'B202606151433205272575:A2:CP349675885LN', 'CP349675885LN', 'LOAD', 'REBAG', 'BLIND', NULL, 'B202606151433205272575', NULL, NULL, NULL, 'A1', NULL, 'A2', '3', NULL, '2026-06-15 14:33:21', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (24, 'PIL202606151527027805452', 'unpack-1781508422487-1:B202606151433205272575:CP349675885LN', 'CP349675885LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606151433205272575', NULL, NULL, 'B202606151433205272575 ', 'BATCH-1781508422487-1', 'A2', NULL, NULL, '8', 'WEB-UI', '2026-06-15 15:27:03', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (25, 'PIL202606151527104111558', 'route-scan-1781508430314-1:A2:CP349675885LN', 'CP349675885LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'A2', NULL, NULL, NULL, 'A2', NULL, 'A2', '8', 'SCAN-GUN-STUB', '2026-06-15 15:27:10', 'VALID', '{\"nextHop\": \"A2\", \"securityStatus\": \"PASS\"}');
+INSERT INTO `package_item_line` VALUES (26, 'PIL202606151527463626735', 'B202606151527463283597:A2:CP349675885LN', 'CP349675885LN', 'LOAD', 'REBAG', 'BLIND', NULL, 'B202606151527463283597', NULL, NULL, NULL, 'A2', NULL, 'A2', '8', NULL, '2026-06-15 15:27:46', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (29, 'PIL202606151528419958247', 'unpack-1781508521912-1:B202606151527463283597:CP349675885LN', 'CP349675885LN', 'UNLOAD', 'UNPACK', 'PREALERT', 'B202606151527463283597', NULL, NULL, 'B202606151527463283597', 'BATCH-1781508521912-1', 'A2', NULL, NULL, '8', 'WEB-UI', '2026-06-15 15:28:42', 'VALID', NULL);
+INSERT INTO `package_item_line` VALUES (30, 'PIL202606161643489427540', 'country-slot-1781599428876-JP:JP:CP349675885LN', 'CP349675885LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'B202606161643489394950', NULL, NULL, NULL, 'A2', NULL, 'JP', '8', NULL, '2026-06-16 16:43:49', 'VALID', '{\"countryCode\": \"JP\", \"exportFacilityCode\": \"A2\"}');
+INSERT INTO `package_item_line` VALUES (31, 'PIL202606161643592454464', 'country-slot-1781599439235-JP:JP:CP349675885LN', 'CP349675885LN', 'LOAD', 'ROUTE', 'BLIND', NULL, 'B202606161643592456940', NULL, NULL, NULL, 'A2', NULL, 'JP', '8', NULL, '2026-06-16 16:43:59', 'VALID', '{\"countryCode\": \"JP\", \"exportFacilityCode\": \"A2\"}');
+INSERT INTO `package_item_line` VALUES (32, 'PIL202606161644170285341', 'B202606161644170267241:JP:CP349675885LN', 'CP349675885LN', 'LOAD', 'REBAG', 'BLIND', NULL, 'B202606161644170267241', NULL, NULL, NULL, 'A2', NULL, 'JP', '8', NULL, '2026-06-16 16:44:17', 'VALID', NULL);
+
+-- ----------------------------
+-- Table structure for sorting_manifest
+-- ----------------------------
+DROP TABLE IF EXISTS `sorting_manifest`;
+CREATE TABLE `sorting_manifest`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `manifest_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `manifest_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_org_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `destination_org_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `batch_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `manifest_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `prealert_flag` tinyint NOT NULL DEFAULT 1,
+  `expected_package_qty` int NOT NULL DEFAULT 0,
+  `expected_item_qty` int NOT NULL DEFAULT 0,
+  `eta_time` datetime NULL DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_sorting_manifest_no`(`manifest_no` ASC) USING BTREE,
+  INDEX `idx_sorting_manifest_batch`(`batch_no` ASC, `manifest_status` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of sorting_manifest
+-- ----------------------------
+INSERT INTO `sorting_manifest` VALUES (1, 'B202606141944282829166', 'TRANSIT', 'B1', '', 'B202606141944282829166', 'RECEIVED', 1, 1, 4, NULL, '2026-06-14 19:44:29', '2026-06-14 19:44:29');
+INSERT INTO `sorting_manifest` VALUES (2, 'B202606142058276486248', 'TRANSIT', 'B1', '', 'B202606142058276486248', 'RECEIVED', 1, 1, 4, NULL, '2026-06-14 20:58:29', '2026-06-14 20:58:29');
+INSERT INTO `sorting_manifest` VALUES (3, 'B202606142113545173520', 'TRANSIT', 'B1', 'A1', 'B202606142113545173520', 'RECEIVED', 1, 1, 5, NULL, '2026-06-14 21:13:56', '2026-06-14 21:14:02');
+INSERT INTO `sorting_manifest` VALUES (4, 'B202606142257385910126', 'TRANSIT', 'B1', 'A1', 'B202606142257385910126', 'RECEIVED', 1, 1, 2, NULL, '2026-06-14 22:57:39', '2026-06-14 22:58:53');
+INSERT INTO `sorting_manifest` VALUES (5, 'B202606151239221266281', 'TRANSIT', 'B1', 'A1', 'B202606151239221266281', 'RECEIVED', 1, 1, 2, NULL, '2026-06-15 12:39:23', '2026-06-15 12:39:37');
+INSERT INTO `sorting_manifest` VALUES (6, 'B202606151419192235333', 'TRANSIT', 'B2', 'A1', 'B202606151419192235333', 'RECEIVED', 1, 1, 1, NULL, '2026-06-15 14:19:20', '2026-06-15 14:20:24');
+
+-- ----------------------------
+-- Table structure for sorting_manifest_item
+-- ----------------------------
+DROP TABLE IF EXISTS `sorting_manifest_item`;
+CREATE TABLE `sorting_manifest_item`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `manifest_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expected_package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `expected_seq_no` int NULL DEFAULT NULL,
+  `expected_route_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `expected_qty` int NOT NULL DEFAULT 1,
+  `item_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'EXPECTED',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_sorting_manifest_item`(`manifest_no` ASC, `item_no` ASC) USING BTREE,
+  INDEX `idx_sorting_manifest_item_no`(`item_no` ASC) USING BTREE,
+  INDEX `idx_sorting_manifest_item_manifest`(`manifest_no` ASC, `item_status` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 19 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of sorting_manifest_item
+-- ----------------------------
+INSERT INTO `sorting_manifest_item` VALUES (1, 'B202606141944282829166', 'CP534970949LN', 'B202606141944282829166', 1, NULL, 1, 'EXPECTED', '2026-06-14 19:44:29');
+INSERT INTO `sorting_manifest_item` VALUES (2, 'B202606141944282829166', 'CP012182190LN', 'B202606141944282829166', 2, NULL, 1, 'EXPECTED', '2026-06-14 19:44:29');
+INSERT INTO `sorting_manifest_item` VALUES (3, 'B202606141944282829166', 'CP910563765LN', 'B202606141944282829166', 3, NULL, 1, 'EXPECTED', '2026-06-14 19:44:29');
+INSERT INTO `sorting_manifest_item` VALUES (4, 'B202606141944282829166', 'CP359877856LN', 'B202606141944282829166', 4, NULL, 1, 'EXPECTED', '2026-06-14 19:44:29');
+INSERT INTO `sorting_manifest_item` VALUES (5, 'B202606142058276486248', 'CP716878104LN', 'B202606142058276486248', 1, NULL, 1, 'EXPECTED', '2026-06-14 20:58:29');
+INSERT INTO `sorting_manifest_item` VALUES (6, 'B202606142058276486248', 'CP227420660LN', 'B202606142058276486248', 2, NULL, 1, 'EXPECTED', '2026-06-14 20:58:29');
+INSERT INTO `sorting_manifest_item` VALUES (7, 'B202606142058276486248', 'CP805918012LN', 'B202606142058276486248', 3, NULL, 1, 'EXPECTED', '2026-06-14 20:58:29');
+INSERT INTO `sorting_manifest_item` VALUES (8, 'B202606142058276486248', 'CP261040131LN', 'B202606142058276486248', 4, NULL, 1, 'EXPECTED', '2026-06-14 20:58:29');
+INSERT INTO `sorting_manifest_item` VALUES (9, 'B202606142113545173520', 'CP589971586LN', 'B202606142113545173520', 1, NULL, 1, 'EXPECTED', '2026-06-14 21:13:56');
+INSERT INTO `sorting_manifest_item` VALUES (10, 'B202606142113545173520', 'CP832332893LN', 'B202606142113545173520', 2, NULL, 1, 'EXPECTED', '2026-06-14 21:13:56');
+INSERT INTO `sorting_manifest_item` VALUES (11, 'B202606142113545173520', 'CP410839784LN', 'B202606142113545173520', 3, NULL, 1, 'EXPECTED', '2026-06-14 21:13:56');
+INSERT INTO `sorting_manifest_item` VALUES (12, 'B202606142113545173520', 'CP863155717LN', 'B202606142113545173520', 4, NULL, 1, 'EXPECTED', '2026-06-14 21:13:56');
+INSERT INTO `sorting_manifest_item` VALUES (13, 'B202606142113545173520', 'CP937723240LN', 'B202606142113545173520', 5, NULL, 1, 'EXPECTED', '2026-06-14 21:13:56');
+INSERT INTO `sorting_manifest_item` VALUES (14, 'B202606142257385910126', 'CP410792509LN', 'B202606142257385910126', 1, NULL, 1, 'EXPECTED', '2026-06-14 22:57:39');
+INSERT INTO `sorting_manifest_item` VALUES (15, 'B202606142257385910126', 'CP181462670LN', 'B202606142257385910126', 2, NULL, 1, 'EXPECTED', '2026-06-14 22:57:39');
+INSERT INTO `sorting_manifest_item` VALUES (16, 'B202606151239221266281', 'CP575712238LN', 'B202606151239221266281', 1, NULL, 1, 'EXPECTED', '2026-06-15 12:39:23');
+INSERT INTO `sorting_manifest_item` VALUES (17, 'B202606151239221266281', 'CP108284632LN', 'B202606151239221266281', 2, NULL, 1, 'EXPECTED', '2026-06-15 12:39:23');
+INSERT INTO `sorting_manifest_item` VALUES (18, 'B202606151419192235333', 'CP349675885LN', 'B202606151419192235333', 1, NULL, 1, 'EXPECTED', '2026-06-15 14:19:20');
+
+-- ----------------------------
+-- Table structure for sorting_total_package
+-- ----------------------------
+DROP TABLE IF EXISTS `sorting_total_package`;
+CREATE TABLE `sorting_total_package`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `package_level` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `package_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_org_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `destination_org_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `parent_package_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `manifest_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `prealert_flag` tinyint NOT NULL DEFAULT 0,
+  `sealed_at` datetime NULL DEFAULT NULL,
+  `dispatched_at` datetime NULL DEFAULT NULL,
+  `received_at` datetime NULL DEFAULT NULL,
+  `opened_at` datetime NULL DEFAULT NULL,
+  `terminal_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `version` bigint NOT NULL DEFAULT 0,
+  `extra` json NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_sorting_total_package_no`(`package_no` ASC) USING BTREE,
+  INDEX `idx_sorting_total_package_status`(`package_status` ASC, `source_org_code` ASC, `updated_at` ASC) USING BTREE,
+  INDEX `idx_sorting_total_package_manifest`(`manifest_no` ASC) USING BTREE,
+  INDEX `idx_sorting_total_package_parent`(`parent_package_no` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of sorting_total_package
+-- ----------------------------
+INSERT INTO `sorting_total_package` VALUES (1, 'CP589971586LN', 'TRANSIT', 'RECEIVED', 'A1', NULL, NULL, 'B202606142113545173520', 1, NULL, NULL, '2026-06-14 21:21:30', NULL, NULL, 1, NULL, '2026-06-14 21:21:30', '2026-06-14 21:21:30');
+INSERT INTO `sorting_total_package` VALUES (2, 'B202606142113545173520', 'TRANSIT', 'OPENED', 'A1', NULL, NULL, 'B202606142113545173520', 1, NULL, NULL, '2026-06-14 21:23:39', '2026-06-14 21:24:08', 'OPENED', 3, NULL, '2026-06-14 21:23:39', '2026-06-14 21:24:08');
+INSERT INTO `sorting_total_package` VALUES (3, 'B202606142257385910126', 'TRANSIT', 'OPENED', 'A1', NULL, NULL, 'B202606142257385910126', 1, NULL, NULL, '2026-06-14 23:00:50', '2026-06-14 23:05:18', 'OPENED', 3, NULL, '2026-06-14 23:00:50', '2026-06-14 23:05:18');
+INSERT INTO `sorting_total_package` VALUES (4, 'B202606151239221266281', 'TRANSIT', 'OPENED', 'A1', NULL, NULL, 'B202606151239221266281', 1, NULL, NULL, '2026-06-15 12:40:09', '2026-06-15 12:40:32', 'OPENED', 3, NULL, '2026-06-15 12:40:09', '2026-06-15 12:40:32');
+INSERT INTO `sorting_total_package` VALUES (11, 'B2', 'TRANSIT', 'OPENING', 'A1', 'B2', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, '2026-06-15 13:04:23', '2026-06-15 13:04:23');
+INSERT INTO `sorting_total_package` VALUES (12, 'B202606151304225858768', 'TRANSIT', 'SEALED', 'A1', 'B2', 'B2', NULL, 0, '2026-06-15 13:04:23', NULL, NULL, NULL, NULL, 1, NULL, '2026-06-15 13:04:23', '2026-06-15 13:04:23');
+INSERT INTO `sorting_total_package` VALUES (13, 'B202606151419192235333', 'TRANSIT', 'OPENED', 'A1', NULL, NULL, 'B202606151419192235333', 1, NULL, NULL, '2026-06-15 14:23:13', '2026-06-15 14:24:13', 'OPENED', 3, NULL, '2026-06-15 14:23:13', '2026-06-15 14:24:13');
+INSERT INTO `sorting_total_package` VALUES (14, 'A2', 'TRANSIT', 'OPENING', 'A1', 'A2', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, '2026-06-15 14:33:21', '2026-06-15 14:33:21');
+INSERT INTO `sorting_total_package` VALUES (15, 'B202606151433205272575', 'TRANSIT', 'OPENED', 'A1', 'A2', 'A2', NULL, 0, '2026-06-15 14:33:21', NULL, '2026-06-15 15:25:58', '2026-06-15 15:27:03', 'OPENED', 4, NULL, '2026-06-15 14:33:21', '2026-06-15 15:27:03');
+INSERT INTO `sorting_total_package` VALUES (16, 'B202606151527463283597', 'TRANSIT', 'OPENED', 'A2', 'A2', 'A2', NULL, 0, '2026-06-15 15:27:47', NULL, '2026-06-15 15:27:59', '2026-06-15 15:28:42', 'OPENED', 5, NULL, '2026-06-15 15:27:46', '2026-06-15 15:28:42');
+INSERT INTO `sorting_total_package` VALUES (17, 'B202606161643489394950', 'EXPORT', 'SEALED', 'A2', 'JP', NULL, NULL, 1, NULL, NULL, NULL, NULL, 'COUNTRY_SLOT', 1, NULL, '2026-06-16 16:43:50', '2026-06-16 16:43:50');
+INSERT INTO `sorting_total_package` VALUES (18, 'B202606161643592456940', 'EXPORT', 'SEALED', 'A2', 'JP', NULL, NULL, 1, NULL, NULL, NULL, NULL, 'COUNTRY_SLOT', 1, NULL, '2026-06-16 16:43:59', '2026-06-16 16:43:59');
+INSERT INTO `sorting_total_package` VALUES (19, 'JP', 'TRANSIT', 'OPENING', 'A2', 'JP', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, '2026-06-16 16:44:17', '2026-06-16 16:44:17');
+INSERT INTO `sorting_total_package` VALUES (20, 'B202606161644170267241', 'TRANSIT', 'SEALED', 'A2', 'JP', 'JP', NULL, 0, '2026-06-16 16:44:18', NULL, NULL, NULL, NULL, 1, NULL, '2026-06-16 16:44:17', '2026-06-16 16:44:18');
+
+SET FOREIGN_KEY_CHECKS = 1;

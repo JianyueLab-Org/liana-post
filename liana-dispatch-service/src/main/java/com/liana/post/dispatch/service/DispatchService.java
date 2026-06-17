@@ -10,6 +10,8 @@ import com.liana.post.dispatch.model.dto.DispatchMailSyncRequest;
 import com.liana.post.dispatch.model.dto.HandoffCreateRequest;
 import com.liana.post.dispatch.model.dto.HandoffRecordResponse;
 import com.liana.post.dispatch.model.dto.RouteRuleCreateRequest;
+import com.liana.post.dispatch.model.dto.RouteDecisionRequest;
+import com.liana.post.dispatch.model.dto.RouteDecisionResponse;
 import com.liana.post.common.dto.sorting.ManifestArrivedRequest;
 import com.liana.post.dispatch.model.entity.RouteRuleEntity;
 
@@ -17,6 +19,7 @@ import java.util.List;
 
 public interface DispatchService {
     RouteRuleEntity createRouteRule(RouteRuleCreateRequest request);
+    RouteDecisionResponse resolveRouteDecision(RouteDecisionRequest request);
     DispatchBagResponse createDispatchBag(DispatchBagCreateRequest request);
     DispatchBatchResponse createDispatchBatch(DispatchBatchCreateRequest request);
     DispatchBatchResponse approveDispatchBatch(String batchNo, DispatchBatchApproveRequest request);

@@ -12,6 +12,7 @@ public class TransportRouteRequest {
     private String originFacilityCode;
     @NotBlank
     private String destinationFacilityCode;
+    private String destinationType;
     @NotBlank
     private String transportType;
     @NotNull
@@ -25,6 +26,8 @@ public class TransportRouteRequest {
     public void setOriginFacilityCode(String originFacilityCode) { this.originFacilityCode = originFacilityCode; }
     public String getDestinationFacilityCode() { return destinationFacilityCode; }
     public void setDestinationFacilityCode(String destinationFacilityCode) { this.destinationFacilityCode = destinationFacilityCode; }
+    public String getDestinationType() { return destinationType; }
+    public void setDestinationType(String destinationType) { this.destinationType = destinationType; }
     public String getTransportType() { return transportType; }
     public void setTransportType(String transportType) { this.transportType = transportType; }
     public BigDecimal getEstimatedHours() { return estimatedHours; }

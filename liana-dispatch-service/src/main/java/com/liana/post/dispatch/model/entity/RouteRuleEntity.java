@@ -12,6 +12,9 @@ public class RouteRuleEntity {
     private String ruleCode;
     private String sourceFacilityCode;
     private String targetFacilityCode;
+    private String routeScope;
+    private String destCountryCode;
+    private String exportFacilityCode;
     private Integer priorityLevel;
     private String transportMode;
     private Integer enabled;
@@ -26,6 +29,12 @@ public class RouteRuleEntity {
     public void setSourceFacilityCode(String sourceFacilityCode) { this.sourceFacilityCode = sourceFacilityCode; }
     public String getTargetFacilityCode() { return targetFacilityCode; }
     public void setTargetFacilityCode(String targetFacilityCode) { this.targetFacilityCode = targetFacilityCode; }
+    public String getRouteScope() { return routeScope; }
+    public void setRouteScope(String routeScope) { this.routeScope = routeScope; }
+    public String getDestCountryCode() { return destCountryCode; }
+    public void setDestCountryCode(String destCountryCode) { this.destCountryCode = destCountryCode; }
+    public String getExportFacilityCode() { return exportFacilityCode; }
+    public void setExportFacilityCode(String exportFacilityCode) { this.exportFacilityCode = exportFacilityCode; }
     public Integer getPriorityLevel() { return priorityLevel; }
     public void setPriorityLevel(Integer priorityLevel) { this.priorityLevel = priorityLevel; }
     public String getTransportMode() { return transportMode; }

@@ -12,6 +12,7 @@ public class MailEntity {
     private Long id;
     private String waybillNo;
     private String bagNo;
+    private String packageId;
     private String mailTypeCode;
     private String serviceType;
     private String mailScope;
@@ -20,7 +21,9 @@ public class MailEntity {
     private Long recipientId;
     private String originFacilityCode;
     private String currentFacilityCode;
+    private String currentSlot;
     private String destFacilityCode;
+    private String destinationNode;
     private String status;
     private Integer weightGrams;
     private BigDecimal declaredValue;
@@ -33,6 +36,8 @@ public class MailEntity {
     public void setWaybillNo(String waybillNo) { this.waybillNo = waybillNo; }
     public String getBagNo() { return bagNo; }
     public void setBagNo(String bagNo) { this.bagNo = bagNo; }
+    public String getPackageId() { return packageId; }
+    public void setPackageId(String packageId) { this.packageId = packageId; }
     public String getMailTypeCode() { return mailTypeCode; }
     public void setMailTypeCode(String mailTypeCode) { this.mailTypeCode = mailTypeCode; }
     public String getServiceType() { return serviceType; }
@@ -49,8 +54,12 @@ public class MailEntity {
     public void setOriginFacilityCode(String originFacilityCode) { this.originFacilityCode = originFacilityCode; }
     public String getCurrentFacilityCode() { return currentFacilityCode; }
     public void setCurrentFacilityCode(String currentFacilityCode) { this.currentFacilityCode = currentFacilityCode; }
+    public String getCurrentSlot() { return currentSlot; }
+    public void setCurrentSlot(String currentSlot) { this.currentSlot = currentSlot; }
     public String getDestFacilityCode() { return destFacilityCode; }
     public void setDestFacilityCode(String destFacilityCode) { this.destFacilityCode = destFacilityCode; }
+    public String getDestinationNode() { return destinationNode; }
+    public void setDestinationNode(String destinationNode) { this.destinationNode = destinationNode; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Integer getWeightGrams() { return weightGrams; }

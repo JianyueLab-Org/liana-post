@@ -7,6 +7,9 @@ import com.liana.post.oms.model.entity.MailTypeEntity;
 import com.liana.post.oms.model.entity.ServiceTypeEntity;
 import com.liana.post.oms.model.entity.RecipientEntity;
 import com.liana.post.oms.model.entity.SenderEntity;
+import com.liana.post.oms.model.dto.MailPackageSummaryResponse;
+import com.liana.post.oms.model.dto.MailSlotSummaryResponse;
+import com.liana.post.oms.model.dto.MailSlotSealResponse;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,9 +36,18 @@ public interface OmsRepository {
     List<ServiceTypeEntity> findServiceTypesByCountryCode(String countryCode);
     Optional<SenderEntity> findSenderById(Long id);
     Optional<RecipientEntity> findRecipientById(Long id);
+    List<MailPackageSummaryResponse> findPackageSummaries();
+    List<MailEntity> findMailsByPackageId(String packageId);
+    List<MailEntity> findPendingDeliveryMails(String currentFacilityCode);
     MailEntity updateMailStatus(String waybillNo, String status, String currentFacilityCode);
     MailEntity assignMailBag(String waybillNo, String bagNo, String currentFacilityCode);
     int assignMailBagToWaybillNos(List<String> waybillNos, String bagNo, String currentFacilityCode);
+    MailEntity assignMailSlot(String waybillNo, String slotCode, String destinationNode, String currentFacilityCode, String status);
+    int receiveMailPackage(String packageId, String currentFacilityCode);
+    int openMailPackage(String packageId, String currentFacilityCode);
+    int receiveAndOpenMailPackage(String packageId, String currentFacilityCode);
+    List<MailSlotSummaryResponse> findActiveSlots();
+    MailSlotSealResponse sealMailSlot(String slotCode, String packageId, String destinationNode, String currentFacilityCode, String status);
     boolean hasAnyData();
     default void seedDefaults() {
     }

@@ -189,6 +189,23 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     }
 
     @Override
+    public Optional<RouteRuleEntity> findBestRouteRule(String sourceFacilityCode, String targetFacilityCode, String routeScope, String destCountryCode) {
+        LambdaQueryWrapper<RouteRuleEntity> query = new LambdaQueryWrapper<RouteRuleEntity>()
+                .eq(RouteRuleEntity::getSourceFacilityCode, normalize(sourceFacilityCode))
+                .eq(RouteRuleEntity::getEnabled, 1);
+        if (targetFacilityCode != null && !targetFacilityCode.isBlank()) {
+            query.eq(RouteRuleEntity::getTargetFacilityCode, normalize(targetFacilityCode));
+        }
+        if (routeScope != null && !routeScope.isBlank()) {
+            query.eq(RouteRuleEntity::getRouteScope, normalize(routeScope));
+        }
+        if (destCountryCode != null && !destCountryCode.isBlank()) {
+            query.eq(RouteRuleEntity::getDestCountryCode, normalize(destCountryCode));
+        }
+        return routeRuleMapper.selectList(query.orderByAsc(RouteRuleEntity::getPriorityLevel)).stream().findFirst();
+    }
+
+    @Override
     public Optional<DispatchBagEntity> findDispatchBagById(Long id) {
         return Optional.ofNullable(dispatchBagMapper.selectById(id));
     }
@@ -270,6 +287,7 @@ public class MyBatisDispatchRepository implements DispatchRepository {
         rule.setRuleCode("B1-C1-TRUCK");
         rule.setSourceFacilityCode("B1");
         rule.setTargetFacilityCode("C1");
+        rule.setRouteScope("DOMESTIC");
         rule.setTransportMode("TRUCK");
         rule.setPriorityLevel(1);
         rule.setEnabled(1);

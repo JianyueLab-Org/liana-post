@@ -86,8 +86,10 @@ public class AuthServiceImpl implements AuthService {
         if (authRepository.existsUserByUsername(username)) {
             throw new BusinessException(409, "user already exists: " + username);
         }
-        RoleEntity role = authRepository.findRoleByCode(request.getRoleCode())
-                .orElseThrow(() -> new BusinessException(404, "role not found: " + request.getRoleCode()));
+        String roleCode = normalize(request.getRoleCode());
+        final String resolvedRoleCode = "POSTOFFICE".equals(roleCode) ? AuthConstants.ROLE_CLERK : roleCode;
+        RoleEntity role = authRepository.findRoleByCode(resolvedRoleCode)
+                .orElseThrow(() -> new BusinessException(404, "role not found: " + resolvedRoleCode));
 
         UserEntity user = new UserEntity();
         user.setUsername(username);
@@ -116,6 +118,9 @@ public class AuthServiceImpl implements AuthService {
     public List<RoleResponse> listRoles() {
         List<RoleResponse> responses = new ArrayList<>();
         for (RoleEntity role : authRepository.findAllRoles()) {
+            if ("POSTOFFICE".equals(role.getCode())) {
+                continue;
+            }
             responses.add(AuthMapper.toRoleResponse(role));
         }
         return responses;
@@ -140,10 +145,10 @@ public class AuthServiceImpl implements AuthService {
         List<String> skippedUsers = new ArrayList<>();
 
         for (String[] roleDef : new String[][]{
-                {AuthConstants.ROLE_CLERK, "邮局营业员"},
-                {AuthConstants.ROLE_MANAGER, "邮局经理"},
-                {AuthConstants.ROLE_SORTER, "转运中心操作员"},
-                {AuthConstants.ROLE_ADMIN, "系统管理员"}
+                {AuthConstants.ROLE_CLERK, "CLERK"},
+                {AuthConstants.ROLE_MANAGER, "MANAGER"},
+                {AuthConstants.ROLE_SORTER, "SORTER"},
+                {AuthConstants.ROLE_ADMIN, "ADMIN"}
         }) {
             if (authRepository.existsRoleByCode(roleDef[0])) {
                 skippedRoles.add(roleDef[0]);
@@ -161,12 +166,12 @@ public class AuthServiceImpl implements AuthService {
         }
 
         for (String[] permissionDef : new String[][]{
-                {"MAIL_CREATE", "邮件收寄"},
-                {"MAIL_QUERY", "邮件查询"},
-                {"TRACK_QUERY", "轨迹查询"},
-                {"TOKEN_ISSUE", "Token签发"},
-                {"USER_ADMIN", "用户管理"},
-                {"ROLE_ADMIN", "角色管理"}
+                {"MAIL_CREATE", "MAIL_CREATE"},
+                {"MAIL_QUERY", "MAIL_QUERY"},
+                {"TRACK_QUERY", "TRACK_QUERY"},
+                {"TOKEN_ISSUE", "TOKEN_ISSUE"},
+                {"USER_ADMIN", "USER_ADMIN"},
+                {"ROLE_ADMIN", "ROLE_ADMIN"}
         }) {
             if (authRepository.existsPermissionByCode(permissionDef[0])) {
                 skippedPermissions.add(permissionDef[0]);
@@ -218,7 +223,6 @@ public class AuthServiceImpl implements AuthService {
         response.setSkippedUsers(skippedUsers);
         return response;
     }
-
     private List<String> ensureUser(String username,
                                     RoleEntity role,
                                     String displayName,

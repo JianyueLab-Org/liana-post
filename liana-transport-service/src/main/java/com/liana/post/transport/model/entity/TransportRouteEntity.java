@@ -12,8 +12,8 @@ public class TransportRouteEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String routeCode;
-    private Long originFacilityId;
-    private Long destinationFacilityId;
+    private String originFacilityId;
+    private String destinationFacilityId;
     private String transportType;
     private BigDecimal estimatedHours;
     private String status;
@@ -24,10 +24,10 @@ public class TransportRouteEntity {
     public void setId(Long id) { this.id = id; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
-    public Long getOriginFacilityId() { return originFacilityId; }
-    public void setOriginFacilityId(Long originFacilityId) { this.originFacilityId = originFacilityId; }
-    public Long getDestinationFacilityId() { return destinationFacilityId; }
-    public void setDestinationFacilityId(Long destinationFacilityId) { this.destinationFacilityId = destinationFacilityId; }
+    public String getOriginFacilityId() { return originFacilityId; }
+    public void setOriginFacilityId(String originFacilityId) { this.originFacilityId = originFacilityId; }
+    public String getDestinationFacilityId() { return destinationFacilityId; }
+    public void setDestinationFacilityId(String destinationFacilityId) { this.destinationFacilityId = destinationFacilityId; }
     public String getTransportType() { return transportType; }
     public void setTransportType(String transportType) { this.transportType = transportType; }
     public BigDecimal getEstimatedHours() { return estimatedHours; }

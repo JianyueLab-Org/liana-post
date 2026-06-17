@@ -4,15 +4,22 @@ import com.liana.post.common.constant.LogisticsConstants;
 import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
+import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
 import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.util.UpuBarcodeUtil;
 import com.liana.post.oms.cache.RedisCacheSupport;
 import com.liana.post.oms.cache.RedisKeyConstants;
 import com.liana.post.oms.client.DispatchClient;
+import com.liana.post.oms.client.TrackingClient;
 import com.liana.post.oms.model.dto.CountryResponse;
 import com.liana.post.oms.model.dto.MailBagAssignRequest;
 import com.liana.post.oms.model.dto.MailCreateRequest;
+import com.liana.post.oms.model.dto.MailPackageSummaryResponse;
+import com.liana.post.oms.model.dto.MailRouteAssignRequest;
 import com.liana.post.oms.model.dto.MailResponse;
+import com.liana.post.oms.model.dto.MailSlotSealRequest;
+import com.liana.post.oms.model.dto.MailSlotSealResponse;
+import com.liana.post.oms.model.dto.MailSlotSummaryResponse;
 import com.liana.post.oms.model.dto.MailStatusUpdateRequest;
 import com.liana.post.oms.model.dto.ServiceTypeResponse;
 import com.liana.post.oms.model.entity.MailEntity;
@@ -37,11 +44,13 @@ public class OmsServiceImpl implements OmsService {
 
     private final OmsRepository omsRepository;
     private final ObjectProvider<DispatchClient> dispatchClientProvider;
+    private final ObjectProvider<TrackingClient> trackingClientProvider;
     private final StringRedisTemplate redisTemplate;
 
-    public OmsServiceImpl(OmsRepository omsRepository, ObjectProvider<DispatchClient> dispatchClientProvider, StringRedisTemplate redisTemplate) {
+    public OmsServiceImpl(OmsRepository omsRepository, ObjectProvider<DispatchClient> dispatchClientProvider, ObjectProvider<TrackingClient> trackingClientProvider, StringRedisTemplate redisTemplate) {
         this.omsRepository = omsRepository;
         this.dispatchClientProvider = dispatchClientProvider;
+        this.trackingClientProvider = trackingClientProvider;
         this.redisTemplate = redisTemplate;
     }
 
@@ -90,6 +99,7 @@ public class OmsServiceImpl implements OmsService {
         mail.setDeclaredValue(request.getDeclaredValue());
         mail.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
         mail = omsRepository.saveMail(mail);
+        recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_ACCEPTED, facilityCode, null, null, "{}");
         evictMailCache(mail.getWaybillNo());
         evictCandidateCache();
         return toResponse(mail);
@@ -134,13 +144,28 @@ public class OmsServiceImpl implements OmsService {
     }
 
     @Override
+    public List<MailPackageSummaryResponse> listPackages() {
+        return omsRepository.findPackageSummaries();
+    }
+
+    @Override
+    public List<MailResponse> listPendingDeliveryMails(String currentFacilityCode) {
+        return omsRepository.findPendingDeliveryMails(currentFacilityCode).stream().map(this::toResponse).toList();
+    }
+
+    @Override
     public List<MailDispatchCandidateResponse> listDispatchCandidates(MailDispatchCandidateQueryRequest request) {
-        String cacheKey = RedisKeyConstants.OMS_DISPATCH_CANDIDATES_PREFIX + safeKey(request == null ? null : request.getCurrentFacilityCode()) + ":" + safeKey(request == null ? null : request.getDestFacilityCode()) + ":" + safeKey(request == null ? null : request.getMailTypeCode());
+        String cacheKey = RedisKeyConstants.OMS_DISPATCH_CANDIDATES_PREFIX
+                + safeKey(request == null ? null : request.getCurrentFacilityCode()) + ":"
+                + safeKey(request == null ? null : request.getDestFacilityCode()) + ":"
+                + safeKey(request == null ? null : request.getMailTypeCode()) + ":"
+                + safeKey(request == null ? null : request.getDestCountryCode());
         return RedisCacheSupport.getOrLoad(redisTemplate, cacheKey, new com.fasterxml.jackson.core.type.TypeReference<List<MailDispatchCandidateResponse>>() {}, CANDIDATE_TTL,
                 () -> omsRepository.findAllMails().stream()
                         .filter(mail -> request == null || matches(mail.getCurrentFacilityCode(), request.getCurrentFacilityCode()))
                         .filter(mail -> request == null || matches(mail.getDestFacilityCode(), request.getDestFacilityCode()))
                         .filter(mail -> request == null || matches(mail.getMailTypeCode(), request.getMailTypeCode()))
+                        .filter(mail -> request == null || matches(mail.getDestCountryCode(), request.getDestCountryCode()))
                         .filter(mail -> LogisticsConstants.MAIL_STATUS_CREATED.equals(mail.getStatus()))
                         .filter(mail -> mail.getBagNo() == null || mail.getBagNo().isBlank())
                         .map(mail -> {
@@ -150,6 +175,7 @@ public class OmsServiceImpl implements OmsService {
                             response.setStatus(mail.getStatus());
                             response.setCurrentFacilityCode(mail.getCurrentFacilityCode());
                             response.setDestFacilityCode(mail.getDestFacilityCode());
+                            response.setDestCountryCode(mail.getDestCountryCode());
                             response.setWeightGrams(mail.getWeightGrams());
                             return response;
                         }).toList());
@@ -159,6 +185,7 @@ public class OmsServiceImpl implements OmsService {
     @Transactional
     public MailResponse updateMailStatus(String waybillNo, MailStatusUpdateRequest request) {
         MailEntity mail = omsRepository.updateMailStatus(waybillNo, request.getStatus(), request.getCurrentFacilityCode());
+        recordTracking(mail.getWaybillNo(), mapStatusToEvent(mail.getStatus()), mail.getCurrentFacilityCode(), null, null, "{}");
         evictMailCache(waybillNo);
         evictCandidateCache();
         return toResponse(mail);
@@ -187,6 +214,70 @@ public class OmsServiceImpl implements OmsService {
     }
 
     @Override
+    @Transactional
+    public MailResponse updateMailRoute(String waybillNo, MailRouteAssignRequest request) {
+        MailEntity mail = omsRepository.assignMailSlot(waybillNo, request.getCurrentSlot(), request.getDestinationNode(), request.getCurrentFacilityCode(), request.getStatus());
+        recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_SORTED, mail.getCurrentFacilityCode(), null, null,
+                "{\"slot\":\"" + safeJson(mail.getCurrentSlot()) + "\",\"destinationNode\":\"" + safeJson(mail.getDestinationNode()) + "\"}");
+        evictMailCache(waybillNo);
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
+    @Transactional
+    public int receiveAndOpenMailPackage(String packageId, String currentFacilityCode) {
+        List<MailEntity> packageMails = omsRepository.findMailsByPackageId(packageId);
+        int updated = omsRepository.receiveAndOpenMailPackage(packageId, currentFacilityCode);
+        if (updated > 0) {
+            packageMails.forEach(mail ->
+                    recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_ARRIVED, currentFacilityCode, null, null, "{\"packageId\":\"" + safeJson(packageId) + "\"}"));
+        }
+        evictCandidateCache();
+        return updated;
+    }
+
+    @Override
+    public List<MailSlotSummaryResponse> listActiveSlots() {
+        return omsRepository.findActiveSlots();
+    }
+
+    @Override
+    @Transactional
+    public MailSlotSealResponse sealMailSlot(String slotCode, MailSlotSealRequest request) {
+        List<MailEntity> slotMails = omsRepository.findAllMails().stream()
+                .filter(mail -> slotCode != null && slotCode.equalsIgnoreCase(mail.getCurrentSlot()))
+                .toList();
+        MailSlotSealResponse response = omsRepository.sealMailSlot(slotCode, request.getPackageId(), request.getDestinationNode(), request.getCurrentFacilityCode(), request.getStatus());
+        if (response != null && response.getUpdatedCount() != null && response.getUpdatedCount() > 0) {
+            slotMails.forEach(mail -> recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_DISPATCHED, request.getCurrentFacilityCode(), null, null,
+                    "{\"slotCode\":\"" + safeJson(slotCode) + "\",\"destinationNode\":\"" + safeJson(response.getDestinationNode()) + "\"}"));
+        }
+        evictCandidateCache();
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public MailResponse deliverMail(String waybillNo, String facilityCode) {
+        MailEntity mail = omsRepository.updateMailStatus(waybillNo, LogisticsConstants.MAIL_STATUS_DELIVERED, facilityCode);
+        recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_DELIVERED, mail.getCurrentFacilityCode(), null, null, "{}");
+        evictMailCache(waybillNo);
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
+    @Transactional
+    public MailResponse departExchangeMail(String waybillNo, String facilityCode) {
+        MailEntity mail = omsRepository.updateMailStatus(waybillNo, LogisticsConstants.MAIL_STATUS_DISPATCHED, facilityCode);
+        recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_DISPATCHED, mail.getCurrentFacilityCode(), null, null, "{}");
+        evictMailCache(waybillNo);
+        evictCandidateCache();
+        return toResponse(mail);
+    }
+
+    @Override
     public void initDefaults() {
         omsRepository.seedDefaults();
     }
@@ -211,6 +302,51 @@ public class OmsServiceImpl implements OmsService {
             dispatchClient.syncMailBag(request);
         } catch (Exception ignored) {
         }
+    }
+
+    private void recordTracking(String waybillNo, String eventType, String facilityCode, Long operatorId, String operatorName, String payload) {
+        TrackingClient client = trackingClientProvider.getIfAvailable();
+        if (client == null || waybillNo == null || eventType == null) {
+            return;
+        }
+        TrackingEventCreateRequest request = new TrackingEventCreateRequest();
+        request.setWaybillNo(waybillNo);
+        request.setEventType(eventType);
+        request.setSourceService("OMS");
+        request.setFacilityCode(facilityCode);
+        request.setOperatorId(operatorId);
+        request.setOperatorName(operatorName);
+        request.setPayload(payload);
+        try {
+            client.recordEvent(request);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String mapStatusToEvent(String status) {
+        if (LogisticsConstants.MAIL_STATUS_ACCEPTED.equals(status)) {
+            return LogisticsConstants.TRACKING_EVENT_ACCEPTED;
+        }
+        if (LogisticsConstants.MAIL_STATUS_DELIVERED.equals(status)) {
+            return LogisticsConstants.TRACKING_EVENT_DELIVERED;
+        }
+        if (LogisticsConstants.MAIL_STATUS_DISPATCHED.equals(status)) {
+            return LogisticsConstants.TRACKING_EVENT_DISPATCHED;
+        }
+        if (LogisticsConstants.MAIL_STATUS_ARRIVED.equals(status)) {
+            return LogisticsConstants.TRACKING_EVENT_ARRIVED;
+        }
+        if (LogisticsConstants.MAIL_STATUS_RETURNED.equals(status)) {
+            return LogisticsConstants.TRACKING_EVENT_RETURNED;
+        }
+        return LogisticsConstants.TRACKING_EVENT_SORTED;
+    }
+
+    private String safeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private void evictMailCache(String waybillNo) {

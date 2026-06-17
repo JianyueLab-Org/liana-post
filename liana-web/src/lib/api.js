@@ -58,6 +58,12 @@ export const mailApi = {
   list(token) {
     return request('oms', '/api/oms/mails', { token }).then(unwrapList);
   },
+  listPackages(token) {
+    return request('oms', '/api/oms/packages', { token }).then(unwrapList);
+  },
+  listPendingDeliveryMails(currentFacilityCode, token) {
+    return request('oms', '/api/oms/packages/pending-delivery', { query: { currentFacilityCode }, token }).then(unwrapList);
+  },
   detail(waybillNo, token) {
     return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}`, { token });
   },
@@ -76,11 +82,35 @@ export const mailApi = {
   assignBag(waybillNo, payload, token) {
     return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/bag`, { method: 'POST', body: payload, token });
   },
+  updateRoute(waybillNo, payload, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/route`, { method: 'POST', body: payload, token });
+  },
+  listSlots(token) {
+    return request('oms', '/api/oms/slots', { token }).then(unwrapList);
+  },
+  sealSlot(slotCode, payload, token) {
+    return request('oms', `/api/oms/slots/${encodeURIComponent(slotCode)}/seal`, { method: 'POST', body: payload, token });
+  },
+  receivePackage(payload, token) {
+    return request('oms', '/api/oms/packages/receive-open', { method: 'POST', body: payload, token });
+  },
+  receiveAndOpenPackage(payload, token) {
+    return request('oms', '/api/oms/packages/receive-open', { method: 'POST', body: payload, token });
+  },
+  deliverMail(waybillNo, facilityCode, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/deliver`, { method: 'POST', query: { facilityCode }, token });
+  },
+  departExchangeMail(waybillNo, facilityCode, token) {
+    return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/exchange-depart`, { method: 'POST', query: { facilityCode }, token });
+  },
 };
 
 export const dispatchApi = {
   createRouteRule(payload, token) {
     return request('dispatch', '/api/dispatch/route-rules', { method: 'POST', body: payload, token });
+  },
+  routeDecision(payload, token) {
+    return request('dispatch', '/api/dispatch/route-decisions', { method: 'POST', body: payload, token });
   },
   createBag(payload, token) {
     return request('dispatch', '/api/dispatch/bags', { method: 'POST', body: payload, token });
@@ -147,6 +177,12 @@ export const sortingApi = {
   },
   sealBagBySlot(payload, token) {
     return request('sorting', '/api/v1/sorting/slots/seal', { method: 'POST', body: payload, token });
+  },
+  listCountrySlots(token, stationCode) {
+    return request('sorting', '/api/v1/sorting/country-slots', { query: { stationCode }, token }).then(unwrapList);
+  },
+  sealCountrySlot(payload, token) {
+    return request('sorting', '/api/v1/sorting/country-slots/seal', { method: 'POST', body: payload, token });
   },
 };
 
@@ -228,6 +264,9 @@ export const facilityApi = {
   },
   getType(code, token) {
     return request('facility', `/api/facilities/types/${encodeURIComponent(code)}`, { token });
+  },
+  createFacilityType(payload, token) {
+    return request('facility', '/api/facilities/types', { method: 'POST', body: payload, token });
   },
   createFacility(payload, token) {
     return request('facility', '/api/facilities', { method: 'POST', body: payload, token });

@@ -19,6 +19,8 @@ import com.liana.post.dispatch.model.dto.DispatchBatchApproveRequest;
 import com.liana.post.dispatch.model.dto.DispatchBatchCreateRequest;
 import com.liana.post.dispatch.model.dto.DispatchBatchResponse;
 import com.liana.post.dispatch.model.dto.DispatchMailSyncRequest;
+import com.liana.post.dispatch.model.dto.RouteDecisionRequest;
+import com.liana.post.dispatch.model.dto.RouteDecisionResponse;
 import com.liana.post.dispatch.model.dto.HandoffCreateRequest;
 import com.liana.post.dispatch.model.dto.HandoffRecordResponse;
 import com.liana.post.dispatch.model.dto.RouteRuleCreateRequest;
@@ -78,10 +80,63 @@ public class DispatchServiceImpl implements DispatchService {
         entity.setRuleCode(request.getRuleCode());
         entity.setSourceFacilityCode(request.getSourceFacilityCode());
         entity.setTargetFacilityCode(request.getTargetFacilityCode());
+        entity.setRouteScope(normalizeRouteScope(request.getRouteScope()));
+        entity.setDestCountryCode(normalizeOptional(request.getDestCountryCode()));
+        entity.setExportFacilityCode(normalizeOptional(request.getExportFacilityCode()));
         entity.setTransportMode(request.getTransportMode());
         entity.setPriorityLevel(request.getPriorityLevel());
         entity.setEnabled(1);
         return dispatchRepository.saveRouteRule(entity);
+    }
+
+    @Override
+    public RouteDecisionResponse resolveRouteDecision(RouteDecisionRequest request) {
+        if (request == null) {
+            throw new BusinessException(400, "request cannot be null");
+        }
+        String origin = normalizeRequired(request.getOriginFacilityCode(), "originFacilityCode");
+        String destCountryCode = normalizeRequired(request.getDestCountryCode(), "destCountryCode");
+        String actionMode = normalizeActionMode(request.getActionMode());
+        boolean international = !isDomesticCountry(destCountryCode);
+        String preferredExportFacilityCode = normalizeOptional(request.getManualExportFacilityCode());
+        RouteRuleEntity route = null;
+        if (request.getCurrentRouteCode() != null && !request.getCurrentRouteCode().isBlank()) {
+            route = dispatchRepository.findRouteRuleByCode(request.getCurrentRouteCode().trim()).orElse(null);
+        }
+        if (route == null && international) {
+            route = dispatchRepository.findBestRouteRule(origin, preferredExportFacilityCode, "INTERNATIONAL", destCountryCode)
+                    .orElse(dispatchRepository.findBestRouteRule(origin, null, "INTERNATIONAL", destCountryCode).orElse(null));
+        }
+
+        RouteDecisionResponse response = new RouteDecisionResponse();
+        response.setSourceFacilityCode(origin);
+        response.setMailTypeCode(normalizeRequired(request.getMailTypeCode(), "mailTypeCode"));
+        response.setDestCountryCode(destCountryCode);
+        response.setRouteScope(international ? "INTERNATIONAL" : "DOMESTIC");
+        response.setTransportMode(route == null ? null : route.getTransportMode());
+        response.setRouteCode(route == null ? null : route.getRuleCode());
+        response.setTargetFacilityCode(route == null ? null : resolveRouteTarget(route));
+        response.setExportFacilityCode(route == null ? preferredExportFacilityCode : route.getExportFacilityCode());
+
+        if ("RETURN".equals(actionMode)) {
+            response.setDecision("RETURN_REQUIRED");
+            response.setReason("manual return requested");
+            return response;
+        }
+        if (route == null) {
+            if ("MANUAL".equals(actionMode)) {
+                response.setDecision("MANUAL_EXPORT_SELECTION");
+                response.setReason("no matching route rule found");
+                return response;
+            }
+            response.setDecision("RETURN_REQUIRED");
+            response.setReason("no matching route rule found");
+            return response;
+        }
+
+        response.setDecision("ROUTE_RESOLVED");
+        response.setReason("matched route rule");
+        return response;
     }
 
     @Override
@@ -91,15 +146,28 @@ public class DispatchServiceImpl implements DispatchService {
         if (mailNos == null || mailNos.isEmpty()) {
             throw new BusinessException(400, "mailNoList cannot be empty");
         }
-        List<MailDispatchCandidateResponse> candidates = loadCandidates(request.getOriginFacilityCode(), request.getDestinationFacilityCode(), request.getMailTypeCode());
+        List<MailDispatchCandidateResponse> candidates = loadCandidates(request.getOriginFacilityCode(), request.getDestinationFacilityCode(), request.getMailTypeCode(), request.getDestCountryCode());
         validateCandidates(candidates, mailNos);
 
+        String effectiveCountryCode = resolveEffectiveDestCountryCode(request.getDestCountryCode(), candidates);
         String destinationFacilityCode = resolveDestinationFacilityCode(request.getDestinationFacilityCode(), candidates);
-        RouteRuleEntity route = resolveRoute(request.getRouteCode(), request.getOriginFacilityCode(), destinationFacilityCode);
+        boolean international = effectiveCountryCode != null && !isDomesticCountry(effectiveCountryCode);
+        RouteRuleEntity route = resolveRoute(request.getRouteCode(), request.getOriginFacilityCode(), destinationFacilityCode,
+                international ? effectiveCountryCode : null, international);
+        if (route == null && international) {
+            throw new BusinessException(409, "export route could not be resolved");
+        }
+        if (route == null && !international && destinationFacilityCode.isBlank()) {
+            throw new BusinessException(400, "route could not be resolved");
+        }
+        String resolvedTargetFacilityCode = resolveRouteTarget(route, destinationFacilityCode);
+        if (international && route != null && route.getExportFacilityCode() != null && !route.getExportFacilityCode().isBlank()) {
+            resolvedTargetFacilityCode = route.getExportFacilityCode();
+        }
 
         DispatchBagEntity entity = new DispatchBagEntity();
         entity.setOriginFacilityCode(request.getOriginFacilityCode());
-        entity.setDestinationFacilityCode(destinationFacilityCode);
+        entity.setDestinationFacilityCode(resolvedTargetFacilityCode);
         entity.setRouteCode(route == null ? request.getRouteCode() : route.getRuleCode());
         entity.setMailTypeCode(request.getMailTypeCode());
         entity.setMailNoListAsList(mailNos);
@@ -115,7 +183,7 @@ public class DispatchServiceImpl implements DispatchService {
         DispatchBagResponse bag = syncMailBag(syncRequest);
         createDispatchBatchAuto(entity);
         syncManifestToSorting(bag.getBagNo(), bag.getRouteCode(), bag.getTotalWeightGrams(),
-                request.getOriginFacilityCode(), request.getDestinationFacilityCode(), mailNos);
+                request.getOriginFacilityCode(), resolvedTargetFacilityCode, mailNos);
         return bag;
     }
 
@@ -367,22 +435,43 @@ public class DispatchServiceImpl implements DispatchService {
         }
     }
 
-    private List<MailDispatchCandidateResponse> loadCandidates(String originFacilityCode, String destinationFacilityCode, String mailTypeCode) {
+    private String resolveEffectiveDestCountryCode(String requestedCountryCode, List<MailDispatchCandidateResponse> candidates) {
+        String normalizedRequested = normalizeOptional(requestedCountryCode);
+        Set<String> effectiveCountries = new HashSet<>();
+        for (MailDispatchCandidateResponse candidate : candidates) {
+            effectiveCountries.add(normalizeCountryCode(candidate == null ? null : candidate.getDestCountryCode()));
+        }
+        if (effectiveCountries.size() > 1) {
+            throw new BusinessException(400, "selected mail candidates have mixed destination countries");
+        }
+        String effectiveCountryCode = effectiveCountries.stream().findFirst().orElse(null);
+        if (normalizedRequested != null) {
+            String normalizedEffective = effectiveCountryCode == null ? "LN" : effectiveCountryCode;
+            if (!normalizedRequested.equals(normalizedEffective)) {
+                throw new BusinessException(400, "selected mail candidates do not match requested destination country");
+            }
+            return isDomesticCountry(normalizedRequested) ? null : normalizedRequested;
+        }
+        return isDomesticCountry(effectiveCountryCode) ? null : effectiveCountryCode;
+    }
+
+    private List<MailDispatchCandidateResponse> loadCandidates(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String destCountryCode) {
         OmsClient omsClient = omsClientProvider.getIfAvailable();
         if (omsClient == null) {
             throw new BusinessException(503, "oms client unavailable");
         }
-        Result<List<MailDispatchCandidateResponse>> result = omsClient.listDispatchCandidates(buildCandidateQuery(originFacilityCode, destinationFacilityCode, mailTypeCode));
+        Result<List<MailDispatchCandidateResponse>> result = omsClient.listDispatchCandidates(buildCandidateQuery(originFacilityCode, destinationFacilityCode, mailTypeCode, destCountryCode));
         return result == null || result.getData() == null ? List.of() : result.getData();
     }
 
-    private MailDispatchCandidateQueryRequest buildCandidateQuery(String originFacilityCode, String destinationFacilityCode, String mailTypeCode) {
+    private MailDispatchCandidateQueryRequest buildCandidateQuery(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String destCountryCode) {
         MailDispatchCandidateQueryRequest query = new MailDispatchCandidateQueryRequest();
         query.setCurrentFacilityCode(originFacilityCode);
         if (destinationFacilityCode != null && !destinationFacilityCode.isBlank()) {
             query.setDestFacilityCode(destinationFacilityCode);
         }
         query.setMailTypeCode(mailTypeCode);
+        query.setDestCountryCode(normalizeOptional(destCountryCode));
         return query;
     }
 
@@ -401,14 +490,82 @@ public class DispatchServiceImpl implements DispatchService {
         return "";
     }
 
-    private RouteRuleEntity resolveRoute(String routeCode, String sourceFacilityCode, String targetFacilityCode) {
+    private RouteRuleEntity resolveRoute(String routeCode, String sourceFacilityCode, String targetFacilityCode, String destCountryCode, boolean international) {
         if (routeCode != null && !routeCode.isBlank()) {
             return dispatchRepository.findRouteRuleByCode(routeCode.trim()).orElse(null);
+        }
+        if (international) {
+            return dispatchRepository.findBestRouteRule(sourceFacilityCode, targetFacilityCode, "INTERNATIONAL", destCountryCode)
+                    .orElse(dispatchRepository.findBestRouteRule(sourceFacilityCode, targetFacilityCode, "INTERNATIONAL", null).orElse(null));
         }
         if (targetFacilityCode == null || targetFacilityCode.isBlank()) {
             return null;
         }
-        return dispatchRepository.findBestRouteRule(sourceFacilityCode, targetFacilityCode).orElse(null);
+        return dispatchRepository.findBestRouteRule(sourceFacilityCode, targetFacilityCode, "DOMESTIC", null)
+                .orElse(dispatchRepository.findBestRouteRule(sourceFacilityCode, targetFacilityCode).orElse(null));
+    }
+
+    private boolean isInternationalCandidate(MailDispatchCandidateResponse candidate) {
+        return candidate != null && candidate.getDestCountryCode() != null && !candidate.getDestCountryCode().isBlank() && !"LN".equalsIgnoreCase(candidate.getDestCountryCode());
+    }
+
+    private boolean isDomesticCountry(String countryCode) {
+        return countryCode == null || countryCode.isBlank() || "LN".equalsIgnoreCase(countryCode.trim());
+    }
+
+    private String normalizeRouteScope(String value) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null || normalized.isBlank()) {
+            return "DOMESTIC";
+        }
+        if (!"DOMESTIC".equals(normalized) && !"INTERNATIONAL".equals(normalized)) {
+            throw new BusinessException(400, "unsupported route scope");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.trim().toUpperCase();
+    }
+
+    private String normalizeCountryCode(String value) {
+        return isDomesticCountry(value) ? "LN" : normalizeOptional(value);
+    }
+
+    private String normalizeRequired(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(400, fieldName + " is required");
+        }
+        return value.trim().toUpperCase();
+    }
+
+    private String normalizeActionMode(String value) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null || normalized.isBlank()) {
+            return "AUTO";
+        }
+        if (!"AUTO".equals(normalized) && !"MANUAL".equals(normalized) && !"RETURN".equals(normalized)) {
+            throw new BusinessException(400, "unsupported actionMode");
+        }
+        return normalized;
+    }
+
+    private String resolveRouteTarget(RouteRuleEntity route) {
+        if (route == null) {
+            return null;
+        }
+        if (route.getExportFacilityCode() != null && !route.getExportFacilityCode().isBlank()) {
+            return route.getExportFacilityCode();
+        }
+        return route.getTargetFacilityCode();
+    }
+
+    private String resolveRouteTarget(RouteRuleEntity route, String fallbackTargetFacilityCode) {
+        String target = resolveRouteTarget(route);
+        if (target != null && !target.isBlank()) {
+            return target;
+        }
+        return fallbackTargetFacilityCode;
     }
 
     private int calculateWeight(int mailCount) {

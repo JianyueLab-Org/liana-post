@@ -13,6 +13,8 @@ import com.liana.post.dispatch.model.dto.DispatchBatchResponse;
 import com.liana.post.dispatch.model.dto.DispatchMailSyncRequest;
 import com.liana.post.dispatch.model.dto.HandoffCreateRequest;
 import com.liana.post.dispatch.model.dto.HandoffRecordResponse;
+import com.liana.post.dispatch.model.dto.RouteDecisionRequest;
+import com.liana.post.dispatch.model.dto.RouteDecisionResponse;
 import com.liana.post.dispatch.model.dto.RouteRuleCreateRequest;
 import com.liana.post.dispatch.model.entity.RouteRuleEntity;
 import com.liana.post.dispatch.service.DispatchService;
@@ -45,6 +47,11 @@ public class DispatchController {
     @PostMapping("/route-rules")
     public Result<RouteRuleEntity> createRouteRule(@Valid @RequestBody RouteRuleCreateRequest request) {
         return Result.ok(dispatchService.createRouteRule(request));
+    }
+
+    @PostMapping("/route-decisions")
+    public Result<RouteDecisionResponse> resolveRouteDecision(@Valid @RequestBody RouteDecisionRequest request) {
+        return Result.ok(dispatchService.resolveRouteDecision(request));
     }
 
     @PostMapping("/bags")

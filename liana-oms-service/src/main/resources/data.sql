@@ -38,5 +38,5 @@ INSERT INTO `sender` (`full_name`, `phone`, `id_type`, `id_number`, `address`, `
 INSERT INTO `recipient` (`full_name`, `phone`, `address`, `postcode`, `country_code`) VALUES
 ('Demo Recipient', '0900654321', 'B1 Central, Namoa', '10002', 'LN');
 
-INSERT INTO `mail` (`waybill_no`, `bag_no`, `mail_type_code`, `service_type`, `mail_scope`, `dest_country_code`, `sender_id`, `recipient_id`, `origin_facility_code`, `current_facility_code`, `dest_facility_code`, `status`, `weight_grams`, `declared_value`) VALUES
-('EE123456785LN', NULL, 'R', 'AIR', 'DOMESTIC', NULL, 1, 1, 'B1', 'B1', 'C1', 'CREATED', 120, NULL);
+INSERT INTO `mail` (`waybill_no`, `bag_no`, `package_id`, `mail_type_code`, `service_type`, `mail_scope`, `dest_country_code`, `sender_id`, `recipient_id`, `origin_facility_code`, `current_facility_code`, `current_slot`, `dest_facility_code`, `destination_node`, `status`, `weight_grams`, `declared_value`) VALUES
+('EE123456785LN', NULL, NULL, 'R', 'AIR', 'DOMESTIC', NULL, 1, 1, 'B1', 'B1', NULL, 'C1', NULL, 'CREATED', 120, NULL);

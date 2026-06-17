@@ -1,7 +1,10 @@
 package com.liana.post.facility.service.impl;
 
 import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.model.Result;
+import com.liana.post.facility.client.OmsClient;
 import com.liana.post.facility.constant.FacilityConstants;
+import com.liana.post.facility.model.dto.CountryResponse;
 import com.liana.post.facility.model.dto.FacilityBootstrapData;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
@@ -11,6 +14,7 @@ import com.liana.post.facility.model.entity.FacilityRouteEntity;
 import com.liana.post.facility.model.entity.FacilityTypeEntity;
 import com.liana.post.facility.repository.FacilityRepository;
 import com.liana.post.facility.service.FacilityService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -20,9 +24,11 @@ import java.util.List;
 public class FacilityServiceImpl implements FacilityService {
 
     private final FacilityRepository facilityRepository;
+    private final ObjectProvider<OmsClient> omsClientProvider;
 
-    public FacilityServiceImpl(FacilityRepository facilityRepository) {
+    public FacilityServiceImpl(FacilityRepository facilityRepository, ObjectProvider<OmsClient> omsClientProvider) {
         this.facilityRepository = facilityRepository;
+        this.omsClientProvider = omsClientProvider;
     }
 
     @Override
@@ -69,14 +75,12 @@ public class FacilityServiceImpl implements FacilityService {
         if (facilityRepository.findFacilityByCode(request.getOriginFacilityCode()).isEmpty()) {
             throw new BusinessException(404, "origin facility not found: " + request.getOriginFacilityCode());
         }
-        if (facilityRepository.findFacilityByCode(request.getDestinationFacilityCode()).isEmpty()) {
-            throw new BusinessException(404, "destination facility not found: " + request.getDestinationFacilityCode());
-        }
+        String destinationCode = resolveRouteDestinationCode(request.getDestinationFacilityCode());
 
         FacilityRouteEntity entity = new FacilityRouteEntity();
         entity.setRouteCode(request.getRouteCode());
         entity.setOriginFacilityCode(request.getOriginFacilityCode());
-        entity.setDestinationFacilityCode(request.getDestinationFacilityCode());
+        entity.setDestinationFacilityCode(destinationCode);
         entity.setTransportMode(request.getTransportMode());
         entity.setDistanceKm(request.getDistanceKm());
         entity.setEstimatedHours(request.getEstimatedHours());
@@ -92,11 +96,9 @@ public class FacilityServiceImpl implements FacilityService {
         if (facilityRepository.findFacilityByCode(request.getOriginFacilityCode()).isEmpty()) {
             throw new BusinessException(404, "origin facility not found: " + request.getOriginFacilityCode());
         }
-        if (facilityRepository.findFacilityByCode(request.getDestinationFacilityCode()).isEmpty()) {
-            throw new BusinessException(404, "destination facility not found: " + request.getDestinationFacilityCode());
-        }
+        String destinationCode = resolveRouteDestinationCode(request.getDestinationFacilityCode());
         entity.setOriginFacilityCode(request.getOriginFacilityCode());
-        entity.setDestinationFacilityCode(request.getDestinationFacilityCode());
+        entity.setDestinationFacilityCode(destinationCode);
         entity.setTransportMode(request.getTransportMode());
         entity.setDistanceKm(request.getDistanceKm());
         entity.setEstimatedHours(request.getEstimatedHours());
@@ -157,6 +159,7 @@ public class FacilityServiceImpl implements FacilityService {
         ));
         data.setFacilities(List.of(
                 fac("A1", "Liana Prime", FacilityConstants.TYPE_TRANSFER_CENTER, null, "A1主枢纽"),
+                fac("A2", "International Exchange Bureau", FacilityConstants.TYPE_INTERNATIONAL_GATEWAY, "A1", "A2国际互换局"),
                 fac("B1", "Namoa Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B1支局"),
                 fac("B2", "Taviri Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B2支局"),
                 fac("B3", "Kelea Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B3支局"),
@@ -166,6 +169,8 @@ public class FacilityServiceImpl implements FacilityService {
         ));
         data.setRoutes(List.of(
                 route("R-A1-B1", "A1", "B1", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
+                route("R-A1-A2", "A1", "A2", FacilityConstants.DEFAULT_TRANSPORT_MODE_AIR),
+                route("R-A2-A1", "A2", "A1", FacilityConstants.DEFAULT_TRANSPORT_MODE_AIR),
                 route("R-A1-B2", "A1", "B2", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
                 route("R-A1-B3", "A1", "B3", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
                 route("R-B1-A1", "B1", "A1", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND)
@@ -247,5 +252,36 @@ public class FacilityServiceImpl implements FacilityService {
         request.setEstimatedHours(entity.getEstimatedHours());
         request.setPriorityLevel(entity.getPriorityLevel());
         return request;
+    }
+
+    private String resolveRouteDestinationCode(String destinationCode) {
+        if (!StringUtils.hasText(destinationCode)) {
+            throw new BusinessException(400, "destination code is required");
+        }
+        String normalized = destinationCode.trim();
+        if (facilityRepository.findFacilityByCode(normalized).isPresent()) {
+            return normalized;
+        }
+        if (isKnownCountryCode(normalized)) {
+            return normalized.toUpperCase();
+        }
+        throw new BusinessException(404, "destination facility or country not found: " + normalized);
+    }
+
+    private boolean isKnownCountryCode(String countryCode) {
+        OmsClient client = omsClientProvider.getIfAvailable();
+        if (client == null) {
+            return false;
+        }
+        Result<List<CountryResponse>> result = client.listCountries();
+        if (result == null || result.isFail() || result.getData() == null) {
+            return false;
+        }
+        for (CountryResponse item : result.getData()) {
+            if (item != null && countryCode.equalsIgnoreCase(item.getCode())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

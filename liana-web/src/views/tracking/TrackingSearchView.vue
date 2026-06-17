@@ -25,6 +25,7 @@
 import { ref } from 'vue';
 import TimelineView from '../../components/TimelineView.vue';
 import { trackingApi } from '../../lib/api';
+import { getUpuBarcodeError, normalizeUpuBarcode } from '../../lib/upuBarcode';
 import { useSessionStore } from '../../stores/session';
 
 const session = useSessionStore();
@@ -42,8 +43,19 @@ function mapEvent(item) {
 }
 
 async function search() {
-  const payload = await trackingApi.search({ waybillNo: waybillNo.value }, session.token);
-  events.value = payload.map(mapEvent);
-  summary.value = { waybillNo: waybillNo.value, count: events.value.length };
+  const normalized = normalizeUpuBarcode(waybillNo.value);
+  const error = getUpuBarcodeError(normalized, '运单号');
+  if (error) {
+    summary.value = { error };
+    events.value = [];
+    return;
+  }
+  waybillNo.value = normalized;
+  const payload = await trackingApi.search({ waybillNo: normalized }, session.token);
+  events.value = payload
+    .slice()
+    .sort((a, b) => String(a.eventTime || '').localeCompare(String(b.eventTime || '')))
+    .map(mapEvent);
+  summary.value = { waybillNo: normalized, count: events.value.length };
 }
 </script>

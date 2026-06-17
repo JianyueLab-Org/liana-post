@@ -11,7 +11,7 @@
  Target Server Version : 80040
  File Encoding         : 65001
 
- Date: 12/06/2026 15:45:38
+ Date: 17/06/2026 08:31:28
 */
 
 SET NAMES utf8mb4;
@@ -32,7 +32,7 @@ CREATE TABLE `transport_asset`  (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_transport_asset_code`(`code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of transport_asset
@@ -58,7 +58,7 @@ CREATE TABLE `transport_route`  (
   UNIQUE INDEX `uk_transport_route_code`(`route_code` ASC) USING BTREE,
   INDEX `idx_transport_route_origin`(`origin_facility_id` ASC) USING BTREE,
   INDEX `idx_transport_route_destination`(`destination_facility_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of transport_route
@@ -83,7 +83,7 @@ CREATE TABLE `transport_schedule`  (
   UNIQUE INDEX `uk_transport_schedule_code`(`schedule_code` ASC) USING BTREE,
   INDEX `idx_transport_schedule_asset`(`asset_id` ASC) USING BTREE,
   INDEX `idx_transport_schedule_route`(`route_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of transport_schedule
@@ -108,7 +108,7 @@ CREATE TABLE `transport_task`  (
   INDEX `idx_transport_task_asset`(`asset_id` ASC) USING BTREE,
   INDEX `idx_transport_task_route`(`route_id` ASC) USING BTREE,
   INDEX `idx_transport_task_schedule`(`schedule_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of transport_task

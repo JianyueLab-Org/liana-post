@@ -6,6 +6,7 @@ public class MailDispatchCandidateResponse {
     private String status;
     private String currentFacilityCode;
     private String destFacilityCode;
+    private String destCountryCode;
     private Integer weightGrams;
 
     public String getWaybillNo() {
@@ -46,6 +47,14 @@ public class MailDispatchCandidateResponse {
 
     public void setDestFacilityCode(String destFacilityCode) {
         this.destFacilityCode = destFacilityCode;
+    }
+
+    public String getDestCountryCode() {
+        return destCountryCode;
+    }
+
+    public void setDestCountryCode(String destCountryCode) {
+        this.destCountryCode = destCountryCode;
     }
 
     public Integer getWeightGrams() {
