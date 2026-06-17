@@ -30,3 +30,10 @@ spring:
       - optional:nacos:application.yml
 server:
   port: 8080
+gateway:
+  auth:
+    whitelist-paths:
+      - /api/auth/login
+      - /liana-auth-service/api/auth/login
+      - /actuator/health
+      - /actuator/info
