@@ -1,6 +1,7 @@
 
 package com.liana.post.dispatch.controller;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.DispatchBagBriefResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
 import com.liana.post.common.dto.sorting.ManifestArrivedRequest;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -108,6 +110,11 @@ public class DispatchController {
     @GetMapping("/handoffs")
     public Result<List<HandoffRecordResponse>> listHandoffs() {
         return Result.ok(dispatchService.listHandoffRecords());
+    }
+
+    @GetMapping("/dashboard/summary")
+    public Result<DashboardSummaryResponse> dashboardSummary(@RequestParam(name = "facilityCode", required = false) String facilityCode) {
+        return Result.ok(dispatchService.dashboardSummary(facilityCode));
     }
 
     private DispatchBagBriefResponse toBrief(DispatchBagResponse bag) {

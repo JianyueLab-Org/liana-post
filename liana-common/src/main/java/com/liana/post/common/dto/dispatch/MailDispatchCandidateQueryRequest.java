@@ -4,6 +4,7 @@ public class MailDispatchCandidateQueryRequest {
     private String currentFacilityCode;
     private String destFacilityCode;
     private String mailTypeCode;
+    private String mailScope;
     private String destCountryCode;
 
     public String getCurrentFacilityCode() {
@@ -28,6 +29,14 @@ public class MailDispatchCandidateQueryRequest {
 
     public void setMailTypeCode(String mailTypeCode) {
         this.mailTypeCode = mailTypeCode;
+    }
+
+    public String getMailScope() {
+        return mailScope;
+    }
+
+    public void setMailScope(String mailScope) {
+        this.mailScope = mailScope;
     }
 
     public String getDestCountryCode() {

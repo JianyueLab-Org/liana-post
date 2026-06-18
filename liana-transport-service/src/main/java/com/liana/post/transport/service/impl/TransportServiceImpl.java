@@ -1,5 +1,6 @@
 package com.liana.post.transport.service.impl;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.DispatchBagBriefResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
 import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
@@ -24,6 +25,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class TransportServiceImpl implements TransportService {
@@ -222,8 +226,40 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    public DashboardSummaryResponse dashboardSummary() {
+        PageResult<TransportAssetEntity> assets = pageAssets(1, 1000, null, null);
+        PageResult<TransportRouteEntity> routes = pageRoutes(1, 1000, null, null, null);
+        PageResult<TransportScheduleEntity> schedules = pageSchedules(1, 1000, null, null);
+        PageResult<TransportTaskEntity> tasks = pageTasks(1, 1000, null, null);
+        long availableAssets = assets.getList().stream().filter(item -> TransportConstants.STATUS_AVAILABLE.equals(item.getStatus())).count();
+        long activeRoutes = routes.getList().stream().filter(item -> "ACTIVE".equals(item.getStatus())).count();
+
+        DashboardSummaryResponse response = new DashboardSummaryResponse();
+        response.setTitle("运输数据");
+        response.setScope("全部机构");
+        response.addMetric("运输资源", assets.getTotal(), "transport_asset 表", "info")
+                .addMetric("可用资源", availableAssets, "AVAILABLE", "success")
+                .addMetric("启用线路", activeRoutes, "ACTIVE", "neutral")
+                .addMetric("运输任务", tasks.getTotal(), "transport_task 表", "warning");
+        response.addBreakdown("资源状态", countBy(assets.getList().stream().map(TransportAssetEntity::getStatus).collect(Collectors.toList())));
+        response.addBreakdown("任务状态", countBy(tasks.getList().stream().map(TransportTaskEntity::getStatus).collect(Collectors.toList())));
+        response.addBreakdown("计划状态", countBy(schedules.getList().stream().map(TransportScheduleEntity::getStatus).collect(Collectors.toList())));
+        return response;
+    }
+
+    @Override
     public void initDefaults() {
         transportRepository.seedDefaults();
+    }
+
+    private List<DashboardSummaryResponse.BreakdownItem> countBy(List<String> values) {
+        return values.stream()
+                .map(value -> value == null || value.isBlank() ? "UNKNOWN" : value)
+                .collect(Collectors.groupingBy(value -> value, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .map(entry -> DashboardSummaryResponse.item(entry.getKey(), entry.getValue(), entry.getKey()))
+                .toList();
     }
 
     private void validateAsset(TransportAssetRequest request) {

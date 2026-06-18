@@ -9,6 +9,7 @@ import com.liana.post.auth.model.dto.RoleResponse;
 import com.liana.post.auth.model.dto.UserCreateRequest;
 import com.liana.post.auth.model.dto.UserProfileResponse;
 import com.liana.post.auth.model.dto.UserSummaryResponse;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.auth.service.AuthService;
 import com.liana.post.common.model.Result;
 import jakarta.validation.Valid;
@@ -77,5 +78,10 @@ public class AuthController {
     @PostMapping({"/project/init", "/system/project/init"})
     public Result<ProjectInitResponse> initProject() {
         return Result.ok(authService.initProject());
+    }
+
+    @GetMapping({"/dashboard/summary", "/system/dashboard/summary"})
+    public Result<DashboardSummaryResponse> dashboardSummary() {
+        return Result.ok(authService.dashboardSummary());
     }
 }

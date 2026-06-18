@@ -37,6 +37,9 @@ export const authApi = {
   bootstrapSystem(payload, token) {
     return request('auth', '/api/auth/system/project/init', { method: 'POST', token });
   },
+  dashboardSummary(token) {
+    return request('auth', '/api/auth/system/dashboard/summary', { token });
+  },
 };
 
 export const mailApi = {
@@ -103,6 +106,9 @@ export const mailApi = {
   departExchangeMail(waybillNo, facilityCode, token) {
     return request('oms', `/api/oms/mails/${encodeURIComponent(waybillNo)}/exchange-depart`, { method: 'POST', query: { facilityCode }, token });
   },
+  dashboardSummary(facilityCode, token) {
+    return request('oms', '/api/oms/dashboard/summary', { query: { facilityCode }, token });
+  },
 };
 
 export const dispatchApi = {
@@ -136,14 +142,17 @@ export const dispatchApi = {
   listHandoffs(token) {
     return request('dispatch', '/api/dispatch/handoffs', { token }).then(unwrapList);
   },
+  dashboardSummary(facilityCode, token) {
+    return request('dispatch', '/api/dispatch/dashboard/summary', { query: { facilityCode }, token });
+  },
 };
 
 export const sortingApi = {
   listPackages(token) {
     return request('sorting', '/api/v1/sorting/packages', { token }).then(unwrapList);
   },
-  listManifests(token) {
-    return request('sorting', '/api/v1/sorting/manifests', { token }).then(unwrapList);
+  listManifests(token, params = {}) {
+    return request('sorting', '/api/v1/sorting/manifests', { query: params, token }).then(unwrapList);
   },
   getManifest(manifestNo, token) {
     return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}`, { token });
@@ -156,6 +165,9 @@ export const sortingApi = {
   },
   routeCalculateScan(payload, token) {
     return request('sorting', '/api/v1/sorting/route-calculate/scan', { method: 'POST', body: payload, token });
+  },
+  listPendingRouteItems(stationCode, token) {
+    return request('sorting', '/api/v1/sorting/route-calculate/pending', { query: { stationCode }, token }).then(unwrapList);
   },
   listDiscrepancies(packageNo, token) {
     return request('sorting', '/api/v1/sorting/discrepancies', { query: { packageNo }, token }).then(unwrapList);
@@ -183,6 +195,9 @@ export const sortingApi = {
   },
   sealCountrySlot(payload, token) {
     return request('sorting', '/api/v1/sorting/country-slots/seal', { method: 'POST', body: payload, token });
+  },
+  dashboardSummary(stationCode, token) {
+    return request('sorting', '/api/v1/sorting/dashboard/summary', { query: { stationCode }, token });
   },
 };
 
@@ -256,6 +271,9 @@ export const transportApi = {
   updateTaskStatus(code, payload, token) {
     return request('transport', `/api/transport/tasks/${encodeURIComponent(code)}/status`, { method: 'POST', body: payload, token });
   },
+  dashboardSummary(token) {
+    return request('transport', '/api/transport/dashboard/summary', { token });
+  },
 };
 
 export const facilityApi = {
@@ -288,6 +306,9 @@ export const facilityApi = {
   },
   getRoute(routeCode, token) {
     return request('facility', `/api/facilities/routes/${encodeURIComponent(routeCode)}`, { token });
+  },
+  dashboardSummary(token) {
+    return request('facility', '/api/facilities/dashboard/summary', { token });
   },
 };
 

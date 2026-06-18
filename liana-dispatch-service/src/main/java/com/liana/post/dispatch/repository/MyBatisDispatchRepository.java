@@ -248,6 +248,14 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     }
 
     @Override
+    public Optional<HandoffRecordEntity> findHandoffRecordByBagNo(String bagNo) {
+        return Optional.ofNullable(handoffRecordMapper.selectOne(new LambdaQueryWrapper<HandoffRecordEntity>()
+                .eq(HandoffRecordEntity::getBagNo, normalize(bagNo))
+                .eq(HandoffRecordEntity::getStatus, DispatchConstants.HANDAOFF_STATUS_COMPLETED)
+                .last("LIMIT 1")));
+    }
+
+    @Override
     public List<DispatchBagEntity> findAllDispatchBags() {
         return dispatchBagMapper.selectList(null);
     }

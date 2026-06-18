@@ -24,6 +24,7 @@ public interface DispatchRepository {
     Optional<DispatchBatchEntity> findDispatchBatchByBatchNo(String batchNo);
     Optional<DispatchBatchEntity> findDispatchBatchByBagNo(String bagNo);
     Optional<HandoffRecordEntity> findHandoffRecordByHandoffNo(String handoffNo);
+    Optional<HandoffRecordEntity> findHandoffRecordByBagNo(String bagNo);
     List<DispatchBagEntity> findAllDispatchBags();
     List<DispatchBatchEntity> findAllDispatchBatches();
     List<HandoffRecordEntity> findAllHandoffRecords();

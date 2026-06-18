@@ -1,6 +1,7 @@
 package com.liana.post.dispatch.service.impl;
 
 import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
@@ -47,6 +48,7 @@ import java.net.http.HttpResponse;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DispatchServiceImpl implements DispatchService {
@@ -146,7 +148,7 @@ public class DispatchServiceImpl implements DispatchService {
         if (mailNos == null || mailNos.isEmpty()) {
             throw new BusinessException(400, "mailNoList cannot be empty");
         }
-        List<MailDispatchCandidateResponse> candidates = loadCandidates(request.getOriginFacilityCode(), request.getDestinationFacilityCode(), request.getMailTypeCode(), request.getDestCountryCode());
+        List<MailDispatchCandidateResponse> candidates = loadCandidates(request.getOriginFacilityCode(), request.getDestinationFacilityCode(), request.getMailTypeCode(), request.getMailScope(), request.getDestCountryCode());
         validateCandidates(candidates, mailNos);
 
         String effectiveCountryCode = resolveEffectiveDestCountryCode(request.getDestCountryCode(), candidates);
@@ -154,12 +156,8 @@ public class DispatchServiceImpl implements DispatchService {
         boolean international = effectiveCountryCode != null && !isDomesticCountry(effectiveCountryCode);
         RouteRuleEntity route = resolveRoute(request.getRouteCode(), request.getOriginFacilityCode(), destinationFacilityCode,
                 international ? effectiveCountryCode : null, international);
-        if (route == null && international) {
-            throw new BusinessException(409, "export route could not be resolved");
-        }
-        if (route == null && !international && destinationFacilityCode.isBlank()) {
-            throw new BusinessException(400, "route could not be resolved");
-        }
+        // Post offices can form a new total package before sorting/export route is known.
+        // If a route exists, keep it on the bag; otherwise downstream sorting resolves it later.
         String resolvedTargetFacilityCode = resolveRouteTarget(route, destinationFacilityCode);
         if (international && route != null && route.getExportFacilityCode() != null && !route.getExportFacilityCode().isBlank()) {
             resolvedTargetFacilityCode = route.getExportFacilityCode();
@@ -222,6 +220,10 @@ public class DispatchServiceImpl implements DispatchService {
 
         DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getBagNo())
                 .orElseThrow(() -> new BusinessException(404, "dispatch bag not found"));
+        if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(bag.getStatus())
+                || dispatchRepository.findHandoffRecordByBagNo(bag.getBagNo()).isPresent()) {
+            throw new BusinessException(409, "dispatch bag has already been handed off");
+        }
         DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo())
                 .orElseGet(() -> {
                     DispatchBatchEntity created = new DispatchBatchEntity();
@@ -416,6 +418,34 @@ public class DispatchServiceImpl implements DispatchService {
     }
 
     @Override
+    public DashboardSummaryResponse dashboardSummary(String facilityCode) {
+        List<DispatchBagResponse> bags = listDispatchBags().stream()
+                .filter(bag -> isAllFacility(facilityCode) || matchesFacility(bag.getOriginFacilityCode(), facilityCode) || matchesFacility(bag.getDestinationFacilityCode(), facilityCode))
+                .toList();
+        List<DispatchBatchResponse> batches = listDispatchBatches();
+        List<HandoffRecordResponse> handoffs = listHandoffRecords().stream()
+                .filter(handoff -> isAllFacility(facilityCode) || matchesFacility(handoff.getFromFacilityCode(), facilityCode) || matchesFacility(handoff.getToFacilityCode(), facilityCode))
+                .toList();
+        int mailCount = bags.stream()
+                .map(DispatchBagResponse::getMailCount)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+        long dispatched = bags.stream().filter(bag -> DispatchConstants.BAG_STATUS_DISPATCHED.equals(bag.getStatus())).count();
+
+        DashboardSummaryResponse response = new DashboardSummaryResponse();
+        response.setTitle("调度数据");
+        response.setScope(scopeLabel(facilityCode));
+        response.addMetric("邮袋数", bags.size(), "dispatch_bag 表", "info")
+                .addMetric("已发运", dispatched, "DISPATCHED", "success")
+                .addMetric("批次数", batches.size(), "dispatch_batch 表", "neutral")
+                .addMetric("邮件件数", mailCount, "邮袋 mail_count 汇总", "warning");
+        response.addBreakdown("邮袋状态", countBy(bags.stream().map(DispatchBagResponse::getStatus).collect(Collectors.toList())));
+        response.addBreakdown("交接状态", countBy(handoffs.stream().map(HandoffRecordResponse::getStatus).collect(Collectors.toList())));
+        return response;
+    }
+
+    @Override
     public void initDefaults() {
         dispatchRepository.seedDefaults();
     }
@@ -455,22 +485,23 @@ public class DispatchServiceImpl implements DispatchService {
         return isDomesticCountry(effectiveCountryCode) ? null : effectiveCountryCode;
     }
 
-    private List<MailDispatchCandidateResponse> loadCandidates(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String destCountryCode) {
+    private List<MailDispatchCandidateResponse> loadCandidates(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String mailScope, String destCountryCode) {
         OmsClient omsClient = omsClientProvider.getIfAvailable();
         if (omsClient == null) {
             throw new BusinessException(503, "oms client unavailable");
         }
-        Result<List<MailDispatchCandidateResponse>> result = omsClient.listDispatchCandidates(buildCandidateQuery(originFacilityCode, destinationFacilityCode, mailTypeCode, destCountryCode));
+        Result<List<MailDispatchCandidateResponse>> result = omsClient.listDispatchCandidates(buildCandidateQuery(originFacilityCode, destinationFacilityCode, mailTypeCode, mailScope, destCountryCode));
         return result == null || result.getData() == null ? List.of() : result.getData();
     }
 
-    private MailDispatchCandidateQueryRequest buildCandidateQuery(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String destCountryCode) {
+    private MailDispatchCandidateQueryRequest buildCandidateQuery(String originFacilityCode, String destinationFacilityCode, String mailTypeCode, String mailScope, String destCountryCode) {
         MailDispatchCandidateQueryRequest query = new MailDispatchCandidateQueryRequest();
         query.setCurrentFacilityCode(originFacilityCode);
         if (destinationFacilityCode != null && !destinationFacilityCode.isBlank()) {
             query.setDestFacilityCode(destinationFacilityCode);
         }
         query.setMailTypeCode(mailTypeCode);
+        query.setMailScope(normalizeOptional(mailScope));
         query.setDestCountryCode(normalizeOptional(destCountryCode));
         return query;
     }
@@ -511,6 +542,28 @@ public class DispatchServiceImpl implements DispatchService {
 
     private boolean isDomesticCountry(String countryCode) {
         return countryCode == null || countryCode.isBlank() || "LN".equalsIgnoreCase(countryCode.trim());
+    }
+
+    private boolean isAllFacility(String facilityCode) {
+        return facilityCode == null || facilityCode.isBlank();
+    }
+
+    private boolean matchesFacility(String actual, String facilityCode) {
+        return actual != null && facilityCode != null && actual.equalsIgnoreCase(facilityCode.trim());
+    }
+
+    private String scopeLabel(String facilityCode) {
+        return isAllFacility(facilityCode) ? "全部机构" : facilityCode.trim().toUpperCase();
+    }
+
+    private List<DashboardSummaryResponse.BreakdownItem> countBy(List<String> values) {
+        return values.stream()
+                .map(value -> value == null || value.isBlank() ? "UNKNOWN" : value)
+                .collect(Collectors.groupingBy(value -> value, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .map(entry -> DashboardSummaryResponse.item(entry.getKey(), entry.getValue(), entry.getKey()))
+                .toList();
     }
 
     private String normalizeRouteScope(String value) {
@@ -581,12 +634,24 @@ public class DispatchServiceImpl implements DispatchService {
         response.setDestinationFacilityCode(entity.getDestinationFacilityCode());
         response.setRouteCode(entity.getRouteCode());
         response.setTransportTaskCode(entity.getTransportTaskCode());
-        response.setStatus(entity.getStatus());
+        response.setStatus(effectiveBagStatus(entity));
         response.setMailTypeCode(entity.getMailTypeCode());
         response.setMailNoList(entity.getMailNoListAsList());
         response.setMailCount(entity.getMailCount());
         response.setTotalWeightGrams(entity.getTotalWeightGrams());
         return response;
+    }
+
+    private String effectiveBagStatus(DispatchBagEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(entity.getStatus())) {
+            return DispatchConstants.BAG_STATUS_DISPATCHED;
+        }
+        return dispatchRepository.findHandoffRecordByBagNo(entity.getBagNo()).isPresent()
+                ? DispatchConstants.BAG_STATUS_DISPATCHED
+                : entity.getStatus();
     }
 
     private DispatchBatchResponse toBatchResponse(DispatchBatchEntity entity) {

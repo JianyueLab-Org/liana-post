@@ -1,5 +1,6 @@
 package com.liana.post.sorting.controller;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.sorting.ManifestDTO;
 import com.liana.post.common.model.Result;
 import com.liana.post.sorting.model.dto.*;
@@ -50,6 +51,11 @@ public class SortingController {
         return Result.ok(sortingService.routeCalculate(request));
     }
 
+    @GetMapping("/route-calculate/pending")
+    public Result<List<SortingPendingRouteItemResponse>> listPendingRouteItems(@RequestParam(name = "stationCode", required = false) String stationCode) {
+        return Result.ok(sortingService.listPendingRouteItems(stationCode));
+    }
+
     @PostMapping("/re-bag")
     public Result<SortingPackageResponse> reBag(@Valid @RequestBody SortingRebagRequest request) {
         return Result.ok(sortingService.reBag(request));
@@ -81,8 +87,10 @@ public class SortingController {
     }
 
     @GetMapping("/manifests")
-    public Result<List<SortingManifestResponse>> listManifests() {
-        return Result.ok(sortingService.listManifests());
+    public Result<List<SortingManifestResponse>> listManifests(
+            @RequestParam(name = "receiveCandidate", defaultValue = "true") boolean receiveCandidate,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        return Result.ok(sortingService.listManifests(receiveCandidate, authorization));
     }
 
     @GetMapping("/manifests/{manifestNo}")
@@ -98,5 +106,10 @@ public class SortingController {
     @GetMapping("/discrepancies")
     public Result<List<SortingDiscrepancyResponse>> listDiscrepancies(@RequestParam(name = "packageNo", required = false) String packageNo) {
         return Result.ok(sortingService.listDiscrepancies(packageNo));
+    }
+
+    @GetMapping("/dashboard/summary")
+    public Result<DashboardSummaryResponse> dashboardSummary(@RequestParam(name = "stationCode", required = false) String stationCode) {
+        return Result.ok(sortingService.dashboardSummary(stationCode));
     }
 }

@@ -1,5 +1,6 @@
 package com.liana.post.transport.controller;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.model.Result;
 import com.liana.post.transport.model.dto.PageResult;
 import com.liana.post.transport.model.dto.TransportAssetRequest;
@@ -126,5 +127,10 @@ public class TransportController {
                                                              @RequestParam(name = "keyword", required = false) String keyword,
                                                              @RequestParam(name = "status", required = false) String status) {
         return Result.ok(transportService.pageTasks(page, pageSize, keyword, status));
+    }
+
+    @GetMapping("/dashboard/summary")
+    public Result<DashboardSummaryResponse> dashboardSummary() {
+        return Result.ok(transportService.dashboardSummary());
     }
 }

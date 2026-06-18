@@ -14,8 +14,11 @@ public class SortingLineResponse {
     private String manifestNo;
     private String scanBatchNo;
     private String stationCode;
+    private String sourceCenterCode;
+    private String targetCenterCode;
     private String operatorId;
     private String deviceId;
+    private String ext;
     private LocalDateTime eventTime;
 
     public Long getId() { return id; }
@@ -40,10 +43,16 @@ public class SortingLineResponse {
     public void setScanBatchNo(String scanBatchNo) { this.scanBatchNo = scanBatchNo; }
     public String getStationCode() { return stationCode; }
     public void setStationCode(String stationCode) { this.stationCode = stationCode; }
+    public String getSourceCenterCode() { return sourceCenterCode; }
+    public void setSourceCenterCode(String sourceCenterCode) { this.sourceCenterCode = sourceCenterCode; }
+    public String getTargetCenterCode() { return targetCenterCode; }
+    public void setTargetCenterCode(String targetCenterCode) { this.targetCenterCode = targetCenterCode; }
     public String getOperatorId() { return operatorId; }
     public void setOperatorId(String operatorId) { this.operatorId = operatorId; }
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    public String getExt() { return ext; }
+    public void setExt(String ext) { this.ext = ext; }
     public LocalDateTime getEventTime() { return eventTime; }
     public void setEventTime(LocalDateTime eventTime) { this.eventTime = eventTime; }
 }

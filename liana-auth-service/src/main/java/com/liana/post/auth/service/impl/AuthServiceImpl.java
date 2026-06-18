@@ -15,6 +15,7 @@ import com.liana.post.auth.model.entity.UserEntity;
 import com.liana.post.auth.repository.AuthRepository;
 import com.liana.post.auth.service.AuthService;
 import com.liana.post.auth.util.AuthMapper;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.util.JwtTokenUtil;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -223,6 +225,41 @@ public class AuthServiceImpl implements AuthService {
         response.setSkippedUsers(skippedUsers);
         return response;
     }
+
+    @Override
+    public DashboardSummaryResponse dashboardSummary() {
+        List<UserSummaryResponse> users = listUsers();
+        List<RoleResponse> roles = listRoles();
+        List<PermissionResponse> permissions = listPermissions();
+        long activeUsers = users.stream().filter(user -> Integer.valueOf(1).equals(user.getStatus())).count();
+
+        DashboardSummaryResponse response = new DashboardSummaryResponse();
+        response.setTitle("系统数据");
+        response.setScope("全部机构");
+        response.addMetric("用户数", users.size(), "账号表 user", "info")
+                .addMetric("启用用户", activeUsers, "status = 1", "success")
+                .addMetric("角色数", roles.size(), "role 表", "neutral")
+                .addMetric("权限数", permissions.size(), "permission 表", "warning");
+        response.addBreakdown("用户角色分布", countBy(users.stream()
+                .map(UserSummaryResponse::getRole)
+                .collect(Collectors.toList())));
+        response.addBreakdown("用户状态", List.of(
+                DashboardSummaryResponse.item("启用", activeUsers, "ACTIVE"),
+                DashboardSummaryResponse.item("停用", users.size() - activeUsers, "DISABLED")
+        ));
+        return response;
+    }
+
+    private List<DashboardSummaryResponse.BreakdownItem> countBy(List<String> values) {
+        return values.stream()
+                .map(value -> value == null || value.isBlank() ? "UNASSIGNED" : value)
+                .collect(Collectors.groupingBy(value -> value, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .map(entry -> DashboardSummaryResponse.item(entry.getKey(), entry.getValue(), entry.getKey()))
+                .toList();
+    }
+
     private List<String> ensureUser(String username,
                                     RoleEntity role,
                                     String displayName,

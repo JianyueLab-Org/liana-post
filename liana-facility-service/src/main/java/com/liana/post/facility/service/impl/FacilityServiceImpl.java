@@ -1,5 +1,6 @@
 package com.liana.post.facility.service.impl;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.model.Result;
 import com.liana.post.facility.client.OmsClient;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class FacilityServiceImpl implements FacilityService {
@@ -137,6 +139,29 @@ public class FacilityServiceImpl implements FacilityService {
     @Override
     public List<FacilityRouteEntity> listRoutes() {
         return facilityRepository.findAllRoutes();
+    }
+
+    @Override
+    public DashboardSummaryResponse dashboardSummary() {
+        List<FacilityEntity> facilities = listFacilities();
+        List<FacilityTypeEntity> types = listFacilityTypes();
+        List<FacilityRouteEntity> routes = listRoutes();
+        long activeFacilities = facilities.stream().filter(item -> Integer.valueOf(1).equals(item.getStatus())).count();
+        long activeRoutes = routes.stream().filter(item -> Integer.valueOf(1).equals(item.getStatus())).count();
+
+        DashboardSummaryResponse response = new DashboardSummaryResponse();
+        response.setTitle("设施数据");
+        response.setScope("全部机构");
+        response.addMetric("机构数", facilities.size(), "facility 表", "info")
+                .addMetric("启用机构", activeFacilities, "status = 1", "success")
+                .addMetric("路线数", routes.size(), "facility_route 表", "neutral")
+                .addMetric("机构类型", types.size(), "facility_type 表", "warning");
+        response.addBreakdown("机构类型分布", countBy(facilities.stream().map(FacilityEntity::getTypeCode).collect(Collectors.toList())));
+        response.addBreakdown("路线状态", List.of(
+                DashboardSummaryResponse.item("启用", activeRoutes, "ACTIVE"),
+                DashboardSummaryResponse.item("停用", routes.size() - activeRoutes, "DISABLED")
+        ));
+        return response;
     }
 
     @Override
@@ -266,6 +291,16 @@ public class FacilityServiceImpl implements FacilityService {
             return normalized.toUpperCase();
         }
         throw new BusinessException(404, "destination facility or country not found: " + normalized);
+    }
+
+    private List<DashboardSummaryResponse.BreakdownItem> countBy(List<String> values) {
+        return values.stream()
+                .map(value -> value == null || value.isBlank() ? "UNKNOWN" : value)
+                .collect(Collectors.groupingBy(value -> value, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .map(entry -> DashboardSummaryResponse.item(entry.getKey(), entry.getValue(), entry.getKey()))
+                .toList();
     }
 
     private boolean isKnownCountryCode(String countryCode) {

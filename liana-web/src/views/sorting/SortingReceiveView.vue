@@ -155,8 +155,17 @@ function applyManifest() {
   form.receiveMode = 'PREALERT';
 }
 
+function isManifestChecked(item) {
+  return String(item?.manifestStatus || '').toUpperCase() === 'CHECKED';
+}
+
 async function loadManifests() {
-  manifests.value = await sortingApi.listManifests(session.token);
+  manifests.value = (await sortingApi.listManifests(session.token, { receiveCandidate: true }))
+    .filter((item) => !isManifestChecked(item));
+  if (selectedManifestNo.value && !manifests.value.some((item) => item.manifestNo === selectedManifestNo.value)) {
+    selectedManifestNo.value = '';
+    form.manifestNo = '';
+  }
 }
 
 async function loadPackages() {
@@ -179,7 +188,8 @@ async function submit() {
       idempotencyKey: `receive-${Date.now()}-${++scanSequence}`,
     }, session.token);
     result.value = JSON.stringify(payload, null, 2);
-    await loadPackages();
+    packageNos.value = [];
+    await Promise.all([loadManifests(), loadPackages()]);
   } catch (error) {
     result.value = error.message;
   } finally {

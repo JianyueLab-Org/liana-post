@@ -12,6 +12,7 @@ public class DispatchBagCreateRequest {
     private String routeCode;
     @NotBlank
     private String mailTypeCode;
+    private String mailScope;
     @NotEmpty
     private List<String> mailNoList;
     private String destCountryCode;
@@ -25,6 +26,8 @@ public class DispatchBagCreateRequest {
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
     public String getMailTypeCode() { return mailTypeCode; }
     public void setMailTypeCode(String mailTypeCode) { this.mailTypeCode = mailTypeCode; }
+    public String getMailScope() { return mailScope; }
+    public void setMailScope(String mailScope) { this.mailScope = mailScope; }
     public List<String> getMailNoList() { return mailNoList; }
     public void setMailNoList(List<String> mailNoList) { this.mailNoList = mailNoList; }
     public String getDestCountryCode() { return destCountryCode; }

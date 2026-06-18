@@ -1,5 +1,6 @@
 package com.liana.post.transport.service;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.transport.model.dto.PageResult;
 import com.liana.post.transport.model.dto.TransportAssetRequest;
 import com.liana.post.transport.model.dto.TransportRouteRequest;
@@ -33,5 +34,6 @@ public interface TransportService {
     TransportTaskEntity getTask(String taskCode);
     PageResult<TransportTaskEntity> pageTasks(long page, long pageSize, String keyword, String status);
 
+    DashboardSummaryResponse dashboardSummary();
     void initDefaults();
 }

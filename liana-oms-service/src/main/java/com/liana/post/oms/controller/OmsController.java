@@ -1,6 +1,7 @@
 package com.liana.post.oms.controller;
 
 import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
 import com.liana.post.common.model.Result;
@@ -152,5 +153,10 @@ public class OmsController {
     @GetMapping("/service-types/by-country")
     public Result<List<ServiceTypeResponse>> listServiceTypesByCountry(@RequestParam("countryCode") String countryCode) {
         return Result.ok(omsService.listServiceTypesByCountry(countryCode));
+    }
+
+    @GetMapping("/dashboard/summary")
+    public Result<DashboardSummaryResponse> dashboardSummary(@RequestParam(name = "facilityCode", required = false) String facilityCode) {
+        return Result.ok(omsService.dashboardSummary(facilityCode));
     }
 }

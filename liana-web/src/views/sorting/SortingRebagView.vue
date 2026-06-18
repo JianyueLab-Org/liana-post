@@ -52,7 +52,7 @@ const slots = ref([]);
 async function refresh() {
   loading.value = true;
   try {
-    slots.value = await sortingApi.listSlots(session.token);
+    slots.value = await sortingApi.listSlots(session.token, session.user?.facilityCode || '');
   } finally {
     loading.value = false;
   }

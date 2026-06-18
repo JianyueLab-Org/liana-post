@@ -3,6 +3,7 @@ package com.liana.post.common.dto.dispatch;
 public class MailDispatchCandidateResponse {
     private String waybillNo;
     private String mailTypeCode;
+    private String mailScope;
     private String status;
     private String currentFacilityCode;
     private String destFacilityCode;
@@ -23,6 +24,14 @@ public class MailDispatchCandidateResponse {
 
     public void setMailTypeCode(String mailTypeCode) {
         this.mailTypeCode = mailTypeCode;
+    }
+
+    public String getMailScope() {
+        return mailScope;
+    }
+
+    public void setMailScope(String mailScope) {
+        this.mailScope = mailScope;
     }
 
     public String getStatus() {

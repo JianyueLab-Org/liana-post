@@ -75,7 +75,7 @@ const columns = [
 async function refresh() {
   loading.value = true;
   try {
-    rows.value = await sortingApi.listManifests(session.token);
+    rows.value = await sortingApi.listManifests(session.token, { receiveCandidate: false });
   } finally {
     loading.value = false;
   }

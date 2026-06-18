@@ -1,5 +1,6 @@
 package com.liana.post.facility.controller;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.model.Result;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
@@ -35,4 +36,6 @@ public class FacilityController {
     public Result<List<FacilityRouteEntity>> listRoutes() { return Result.ok(facilityService.listRoutes()); }
     @GetMapping("/routes/{routeCode}")
     public Result<FacilityRouteEntity> getRoute(@PathVariable("routeCode") String routeCode) { return Result.ok(facilityService.getRoute(routeCode)); }
+    @GetMapping("/dashboard/summary")
+    public Result<DashboardSummaryResponse> dashboardSummary() { return Result.ok(facilityService.dashboardSummary()); }
 }

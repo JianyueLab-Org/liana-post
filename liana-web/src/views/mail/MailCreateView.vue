@@ -38,8 +38,9 @@
 
         <input class="input" v-model.number="form.weightGrams" type="number" placeholder="重量(g)" />
 
-        <select class="select" v-model="form.serviceType">
+        <select v-if="isInternational" class="select" v-model="form.serviceType">
           <option value="">请选择服务类型</option>
+          <option v-if="loadingServiceTypes" value="" disabled>Loading...</option>
           <option v-for="item in serviceTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
         </select>
 
@@ -69,9 +70,12 @@ import { useSessionStore } from '../../stores/session';
 const session = useSessionStore();
 const result = ref('');
 const submitting = ref(false);
+const loadingServiceTypes = ref(false);
 const mailTypes = ref([]);
 const countries = ref([]);
 const serviceTypes = ref([]);
+const serviceTypesLoaded = ref(false);
+const DEFAULT_DOMESTIC_SERVICE_TYPE = 'AIR';
 
 const form = reactive({
   mailTypeCode: '',
@@ -106,27 +110,25 @@ async function loadCountries() {
 }
 
 async function loadServiceTypes() {
-  serviceTypes.value = isInternational.value && form.destCountryCode
-    ? await mailApi.listServiceTypesByCountry(form.destCountryCode, session.token)
-    : await mailApi.listServiceTypes(session.token);
+  if (!isInternational.value || serviceTypesLoaded.value) {
+    return;
+  }
 
-  if (!serviceTypes.value.find((item) => item.code === form.serviceType)) {
-    form.serviceType = serviceTypes.value[0]?.code || '';
+  loadingServiceTypes.value = true;
+  try {
+    serviceTypes.value = await mailApi.listServiceTypes(session.token);
+    serviceTypesLoaded.value = true;
+    if (!serviceTypes.value.find((item) => item.code === form.serviceType)) {
+      form.serviceType = serviceTypes.value[0]?.code || '';
+    }
+  } finally {
+    loadingServiceTypes.value = false;
   }
 }
 
 watch(() => form.mailScope, async (value) => {
   form.destCountryCode = '';
-  if (value === 'DOMESTIC') {
-    await loadServiceTypes();
-  } else {
-    form.serviceType = '';
-    serviceTypes.value = [];
-  }
-});
-
-watch(() => form.destCountryCode, async (value) => {
-  if (isInternational.value && value) {
+  if (value === 'INTERNATIONAL') {
     await loadServiceTypes();
   }
 });
@@ -134,12 +136,17 @@ watch(() => form.destCountryCode, async (value) => {
 async function submit() {
   submitting.value = true;
   try {
-    if (!form.mailTypeCode || !form.senderFullName || !form.senderPhone || !form.senderAddress || !form.recipientFullName || !form.recipientPhone || !form.recipientAddress || !form.serviceType) {
+    if (!form.mailTypeCode || !form.senderFullName || !form.senderPhone || !form.senderAddress || !form.recipientFullName || !form.recipientPhone || !form.recipientAddress) {
       result.value = '请补全收寄必需信息';
       return;
     }
     if (isInternational.value && !form.destCountryCode) {
       result.value = '国际邮件必须选择寄达国';
+      return;
+    }
+
+    if (isInternational.value && !form.serviceType) {
+      result.value = 'International mail requires a service type';
       return;
     }
 
@@ -158,7 +165,7 @@ async function submit() {
       recipientPostcode: form.recipientPostcode,
       weightGrams: form.weightGrams,
       declaredValue: form.declaredValue,
-      serviceType: form.serviceType,
+      serviceType: isInternational.value ? form.serviceType : DEFAULT_DOMESTIC_SERVICE_TYPE,
       originFacilityCode: session.user?.facilityCode || '',
       currentFacilityCode: session.user?.facilityCode || '',
     };
@@ -199,6 +206,6 @@ function fillDemo() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadMailTypes(), loadCountries(), loadServiceTypes()]);
+  await Promise.all([loadMailTypes(), loadCountries()]);
 });
 </script>

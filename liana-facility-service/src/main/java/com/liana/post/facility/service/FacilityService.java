@@ -1,5 +1,6 @@
 package com.liana.post.facility.service;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.facility.model.dto.FacilityBootstrapData;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
@@ -21,5 +22,6 @@ public interface FacilityService {
     List<FacilityTypeEntity> listFacilityTypes();
     List<FacilityEntity> listFacilities();
     List<FacilityRouteEntity> listRoutes();
+    DashboardSummaryResponse dashboardSummary();
     FacilityBootstrapData bootstrapDefaults();
 }

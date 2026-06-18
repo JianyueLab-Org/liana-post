@@ -2,6 +2,7 @@ package com.liana.post.oms.service;
 
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.oms.model.dto.CountryResponse;
 import com.liana.post.oms.model.dto.MailBagAssignRequest;
 import com.liana.post.oms.model.dto.MailCreateRequest;
@@ -37,5 +38,6 @@ public interface OmsService {
     MailSlotSealResponse sealMailSlot(String slotCode, MailSlotSealRequest request);
     MailResponse deliverMail(String waybillNo, String facilityCode);
     MailResponse departExchangeMail(String waybillNo, String facilityCode);
+    DashboardSummaryResponse dashboardSummary(String facilityCode);
     void initDefaults();
 }

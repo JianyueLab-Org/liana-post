@@ -147,6 +147,9 @@ CREATE TABLE `route_rule`  (
   `rule_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `source_facility_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `target_facility_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `route_scope` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'DOMESTIC',
+  `dest_country_code` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `export_facility_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `priority_level` int NOT NULL DEFAULT 0,
   `transport_mode` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `enabled` tinyint NOT NULL DEFAULT 1,
@@ -155,13 +158,14 @@ CREATE TABLE `route_rule`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_route_rule_code`(`rule_code` ASC) USING BTREE,
   INDEX `idx_route_rule_source`(`source_facility_code` ASC) USING BTREE,
-  INDEX `idx_route_rule_target`(`target_facility_code` ASC) USING BTREE
+  INDEX `idx_route_rule_target`(`target_facility_code` ASC) USING BTREE,
+  INDEX `idx_route_rule_scope_country`(`source_facility_code` ASC, `route_scope` ASC, `dest_country_code` ASC, `enabled` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of route_rule
 -- ----------------------------
-INSERT INTO `route_rule` VALUES (1, 'B1-C1-TRUCK', 'B1', 'C1', 1, 'TRUCK', 1, '2026-06-10 17:37:13', '2026-06-10 17:37:13');
-INSERT INTO `route_rule` VALUES (2, 'B1-C1-AIR', 'B1', 'C1', 2, 'AIR', 1, '2026-06-10 17:37:13', '2026-06-10 17:37:13');
+INSERT INTO `route_rule` (`id`, `rule_code`, `source_facility_code`, `target_facility_code`, `route_scope`, `dest_country_code`, `export_facility_code`, `priority_level`, `transport_mode`, `enabled`, `created_at`, `updated_at`) VALUES (1, 'B1-C1-TRUCK', 'B1', 'C1', 'DOMESTIC', NULL, NULL, 1, 'TRUCK', 1, '2026-06-10 17:37:13', '2026-06-10 17:37:13');
+INSERT INTO `route_rule` (`id`, `rule_code`, `source_facility_code`, `target_facility_code`, `route_scope`, `dest_country_code`, `export_facility_code`, `priority_level`, `transport_mode`, `enabled`, `created_at`, `updated_at`) VALUES (2, 'B1-C1-AIR', 'B1', 'C1', 'DOMESTIC', NULL, NULL, 2, 'AIR', 1, '2026-06-10 17:37:13', '2026-06-10 17:37:13');
 
 SET FOREIGN_KEY_CHECKS = 1;

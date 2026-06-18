@@ -43,13 +43,21 @@ const session = useSessionStore();
 const result = ref('');
 const submitting = ref(false);
 const bags = ref([]);
+const handoffs = ref([]);
 const routes = ref([]);
 const facilities = ref([]);
 const form = reactive({ bagNo: '', toFacilityCode: '', receiverId: session.user?.userId || null });
 
 const currentFacilityCode = computed(() => session.user?.facilityCode || '');
 const currentFacilityLabel = computed(() => facilityLabel(currentFacilityCode.value));
-const availableBags = computed(() => bags.value.filter((item) => item.originFacilityCode === currentFacilityCode.value && item.status !== 'DISPATCHED'));
+const handedOffBagNos = computed(() => new Set(handoffs.value
+  .filter((item) => item.status === 'COMPLETED')
+  .map((item) => item.bagNo)
+  .filter(Boolean)));
+const availableBags = computed(() => bags.value.filter((item) =>
+  item.originFacilityCode === currentFacilityCode.value
+  && item.status !== 'DISPATCHED'
+  && !handedOffBagNos.value.has(item.bagNo)));
 const routeTargets = computed(() => routes.value.filter((item) => item.originFacilityCode === currentFacilityCode.value));
 const canSubmit = computed(() => Boolean(form.bagNo && form.toFacilityCode) && !submitting.value);
 
@@ -67,9 +75,21 @@ async function loadFacilities() {
 
 async function loadBags() {
   bags.value = await dispatchApi.listBags(session.token);
+  if (form.bagNo && !availableBags.value.some((item) => item.bagNo === form.bagNo)) {
+    form.bagNo = '';
+  }
   if (!form.bagNo && availableBags.value.length) {
     form.bagNo = availableBags.value[0].bagNo;
   }
+}
+
+async function loadHandoffs() {
+  handoffs.value = await dispatchApi.listHandoffs(session.token);
+}
+
+async function refreshBags() {
+  await loadHandoffs();
+  await loadBags();
 }
 
 async function loadRoutes() {
@@ -82,7 +102,7 @@ async function loadRoutes() {
 watch(currentFacilityCode, () => {
   form.bagNo = '';
   form.toFacilityCode = '';
-  loadBags();
+  refreshBags();
   loadRoutes();
 });
 
@@ -100,7 +120,7 @@ async function submit() {
       receiverId: form.receiverId || null,
     }, session.token);
     result.value = JSON.stringify(payload, null, 2);
-    await loadBags();
+    await refreshBags();
   } catch (error) {
     result.value = `交接失败：${error.message}`;
   } finally {
@@ -109,6 +129,6 @@ async function submit() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadFacilities(), loadBags(), loadRoutes()]);
+  await Promise.all([loadFacilities(), refreshBags(), loadRoutes()]);
 });
 </script>

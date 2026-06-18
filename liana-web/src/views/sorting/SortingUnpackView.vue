@@ -62,6 +62,9 @@
 
     <div class="card p-5">
       <h3 class="card-title">结果</h3>
+      <button v-if="canRoute" type="button" class="btn btn-primary mt-4" @click="goRoute">
+        去自动路由安检
+      </button>
       <pre class="mt-4 whitespace-pre-wrap text-sm text-gray-700">{{ result }}</pre>
     </div>
   </div>
@@ -69,15 +72,18 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { sortingApi } from '../../lib/api';
 import { getUpuBarcodeError, normalizeUpuBarcode } from '../../lib/upuBarcode';
 import { useSessionStore } from '../../stores/session';
 
 const session = useSessionStore();
+const router = useRouter();
 const submitting = ref(false);
 const result = ref('');
 const scanInput = ref('');
 const itemNos = ref([]);
+const canRoute = ref(false);
 let unpackScanSequence = 0;
 
 const form = reactive({
@@ -131,10 +137,16 @@ async function submit() {
       items: itemNos.value.map((itemNo) => ({ itemNo })),
     }, session.token);
     result.value = JSON.stringify(payload, null, 2);
+    canRoute.value = true;
   } catch (error) {
     result.value = error.message;
+    canRoute.value = false;
   } finally {
     submitting.value = false;
   }
+}
+
+function goRoute() {
+  router.push('/sorting/route');
 }
 </script>

@@ -1,5 +1,6 @@
 package com.liana.post.dispatch.service;
 
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.dispatch.model.dto.DispatchBagCreateRequest;
 import com.liana.post.dispatch.model.dto.DispatchBagResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
@@ -31,5 +32,6 @@ public interface DispatchService {
     List<DispatchBagResponse> listDispatchBags();
     List<DispatchBatchResponse> listDispatchBatches();
     List<HandoffRecordResponse> listHandoffRecords();
+    DashboardSummaryResponse dashboardSummary(String facilityCode);
     void initDefaults();
 }

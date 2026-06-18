@@ -5,7 +5,7 @@ const ROLE_MENU_RULES = {
       mail: ['MAIL_CREATE', 'MAIL_QUERY'],
       catalog: ['catalog-countries', 'catalog-service-types'],
       dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
-      sorting: ['sorting-unpack', 'sorting-rebag'],
+      sorting: ['sorting-unpack', 'sorting-route', 'sorting-rebag'],
       delivery: ['delivery-postoffice', 'delivery-postoffice-packages'],
       tracking: ['TRACK_QUERY'],
     },
@@ -26,7 +26,7 @@ const ROLE_MENU_RULES = {
     children: {
       catalog: ['catalog-countries', 'catalog-service-types'],
       dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
-      sorting: ['sorting-manifests', 'sorting-receive', 'sorting-unpack', 'sorting-route', 'sorting-rebag'],
+      sorting: ['sorting-manifests', 'sorting-receive', 'sorting-unpack', 'sorting-route', 'sorting-export', 'sorting-rebag'],
       tracking: ['TRACK_QUERY'],
       facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
@@ -98,7 +98,8 @@ const MENU_LIBRARY = {
       { id: 'sorting-manifests', name: '路单管理', path: '/sorting/manifests' },
       { id: 'sorting-receive', name: '接收勾核', path: '/sorting/receive' },
       { id: 'sorting-unpack', name: '开拆作业', path: '/sorting/unpack' },
-      { id: 'sorting-route', name: '出口处理', path: '/sorting/export' },
+      { id: 'sorting-route', name: '自动路由安检', path: '/sorting/route' },
+      { id: 'sorting-export', name: '出口处理', path: '/sorting/export' },
       { id: 'sorting-rebag', name: '再次封发', path: '/sorting/rebag' },
     ],
   },
@@ -183,7 +184,7 @@ export function buildMenuTree(profile = {}) {
       .filter((child) => {
         if (key !== 'sorting') return true;
         if (facilityTypeCode === 'INTERNATIONAL_GATEWAY') return true;
-        return child.id !== 'sorting-route';
+        return child.id !== 'sorting-export';
       });
     if (!children.length) continue;
     nodes.push({ ...entry, children });

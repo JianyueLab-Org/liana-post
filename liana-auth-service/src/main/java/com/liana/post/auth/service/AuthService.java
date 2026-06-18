@@ -8,6 +8,7 @@ import com.liana.post.auth.model.dto.RoleResponse;
 import com.liana.post.auth.model.dto.UserCreateRequest;
 import com.liana.post.auth.model.dto.UserProfileResponse;
 import com.liana.post.auth.model.dto.UserSummaryResponse;
+import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 
 import java.util.List;
 
@@ -21,4 +22,5 @@ public interface AuthService {
     List<RoleResponse> listRoles();
     List<PermissionResponse> listPermissions();
     ProjectInitResponse initProject();
+    DashboardSummaryResponse dashboardSummary();
 }
