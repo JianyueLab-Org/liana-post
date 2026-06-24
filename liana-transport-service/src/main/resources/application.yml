@@ -12,13 +12,13 @@ spring:
     import:
       - optional:nacos:application.yml
   datasource:
-    url: ${TRANSPORT_DB_URL:jdbc:mysql://127.0.0.1:3306/transport_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    url: ${TRANSPORT_DB_URL:jdbc:mysql://127.0.0.1:3306/transport_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
     username: ${TRANSPORT_DB_USERNAME:root}
-    password: ${TRANSPORT_DB_PASSWORD:wuyujie}
+    password: ${TRANSPORT_DB_PASSWORD:${DB_PASSWORD:wuyujie}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: embedded
+      mode: ${TRANSPORT_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
       schema-locations: classpath:schema.sql
       data-locations: classpath:data.sql
       continue-on-error: true

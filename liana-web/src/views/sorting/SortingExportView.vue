@@ -3,8 +3,8 @@
     <div class="card p-5">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 class="card-title">国家格口落格</h3>
-          <p class="mt-1 text-sm text-gray-500">互换局出口按目的国聚合，批量落格后再进入封发流程。</p>
+          <h3 class="card-title">国家格口封袋</h3>
+          <p class="mt-1 text-sm text-gray-500">互换局出口按目的国聚合，确认后生成出口总包。</p>
         </div>
         <span class="rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white">
           {{ session.facilityTypeLabel }}
@@ -15,12 +15,12 @@
     <div class="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
       <section class="card p-5">
         <h4 class="text-base font-semibold text-gray-900">国家格口</h4>
-        <p class="mt-1 text-sm text-gray-500">按国家自动聚合待处理国际邮件，支持批量落格确认。</p>
+        <p class="mt-1 text-sm text-gray-500">按国家自动聚合待处理国际邮件，支持整格出口封袋。</p>
 
         <div class="mt-4 flex gap-2">
           <button class="btn btn-secondary" :disabled="loading" @click="refresh">刷新</button>
           <button class="btn btn-primary" :disabled="!selectedCountry || submitting" @click="sealSelected">
-            {{ submitting ? '处理中...' : '批量落格' }}
+            {{ submitting ? '处理中...' : '出口封袋' }}
           </button>
         </div>
 
@@ -53,8 +53,8 @@
       <section class="card p-5">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <h4 class="text-base font-semibold text-gray-900">落格结果</h4>
-            <p class="mt-1 text-sm text-gray-500">这里展示最近一次批量落格或国家格口状态。</p>
+            <h4 class="text-base font-semibold text-gray-900">封袋结果</h4>
+            <p class="mt-1 text-sm text-gray-500">这里展示最近一次出口封袋或国家格口状态。</p>
           </div>
           <button class="btn btn-secondary" @click="reset">清空</button>
         </div>
@@ -87,7 +87,10 @@ async function refresh() {
   loading.value = true;
   try {
     slots.value = await sortingApi.listCountrySlots(session.token, session.user?.facilityCode || '');
-    if (!selectedCountry.value && slots.value.length) {
+    const selectedStillVisible = slots.value.some((item) => item.countryCode === selectedCountry.value);
+    if (!selectedStillVisible) {
+      selectedCountry.value = slots.value[0]?.countryCode || '';
+    } else if (!selectedCountry.value && slots.value.length) {
       selectedCountry.value = slots.value[0].countryCode;
     }
   } catch (error) {
@@ -112,14 +115,13 @@ async function sealSelected() {
       stationCode: session.user?.facilityCode || '',
       countryCode: slot.countryCode,
       exportFacilityCode: slot.exportFacilityCode || 'A2',
-      itemNos: slot.previewItemNos || [],
       operatorId: session.user?.userId || null,
       idempotencyKey: `country-slot-${Date.now()}-${slot.countryCode}`,
     }, session.token);
     result.value = JSON.stringify(payload, null, 2);
     await refresh();
   } catch (error) {
-    result.value = error?.message || '批量落格失败';
+    result.value = error?.message || '出口封袋失败';
   } finally {
     submitting.value = false;
   }

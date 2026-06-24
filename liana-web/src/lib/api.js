@@ -1,4 +1,5 @@
-import { request } from './gatewayApi';
+import { notifyApiError } from './apiErrorEvents';
+import { ApiRequestError, request } from './gatewayApi';
 
 function unwrapList(payload) {
   if (Array.isArray(payload)) return payload;
@@ -10,8 +11,18 @@ function unwrapList(payload) {
 }
 
 export const authApi = {
-  login(payload) {
-    return request('auth', '/api/auth/login', { method: 'POST', body: payload });
+  async login(payload) {
+    const result = await request('auth', '/api/auth/login', { method: 'POST', body: payload });
+    if (!result?.token) {
+      const error = new ApiRequestError('登录失败：认证服务未返回有效令牌', {
+        service: 'auth',
+        method: 'POST',
+        path: '/api/auth/login',
+      });
+      notifyApiError(error);
+      throw error;
+    }
+    return result;
   },
   profile(username, token) {
     return request('auth', '/api/auth/profile', { query: { username }, token });
@@ -178,6 +189,9 @@ export const sortingApi = {
   unpackItem(payload, token) {
     return request('sorting', '/api/v1/sorting/unpack-item', { method: 'POST', body: payload, token });
   },
+  previewUnpackItems(params, token) {
+    return request('sorting', '/api/v1/sorting/unpack-preview', { query: params, token });
+  },
   routeCalculate(payload, token) {
     return request('sorting', '/api/v1/sorting/route-calculate', { method: 'POST', body: payload, token });
   },
@@ -312,14 +326,29 @@ export const facilityApi = {
   },
 };
 
-export const systemApi = {
-  unsupported() {
-    throw new Error('系统管理服务当前后端未提供控制器，暂未接入真实接口。');
-  },
-};
-
 export const syncApi = {
-  unsupported() {
-    throw new Error('同步监控服务当前后端未提供控制器，暂未接入真实接口。');
+  listOutbox(token) {
+    return request('sync', '/api/syncer/outbox', { token }).then(unwrapList);
+  },
+  listTasks(token) {
+    return request('sync', '/api/syncer/tasks', { token }).then(unwrapList);
+  },
+  listRetries(token) {
+    return request('sync', '/api/syncer/retries', { token }).then(unwrapList);
+  },
+  summary(token) {
+    return request('sync', '/api/syncer/summary', { token });
+  },
+  scanOutbox(token) {
+    return request('sync', '/api/syncer/outbox/scan', { method: 'POST', token });
+  },
+  retryTasks(token) {
+    return request('sync', '/api/syncer/tasks/retry', { method: 'POST', token });
+  },
+  createSuccessDemo(token) {
+    return request('sync', '/api/syncer/demo/success', { method: 'POST', token });
+  },
+  createFailOnceDemo(token) {
+    return request('sync', '/api/syncer/demo/fail-once', { method: 'POST', token });
   },
 };

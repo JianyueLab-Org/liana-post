@@ -6,6 +6,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <strong class="text-sm text-gray-900">{{ item.nodeName }}</strong>
           <StatusBadge :status="item.eventType" />
+          <span v-if="item.stageName" class="text-xs font-medium text-gray-500">{{ item.stageName }}</span>
         </div>
         <p class="mt-1 text-sm text-gray-600">{{ item.description }}</p>
         <p class="mt-1 text-xs text-gray-400">{{ item.eventTime }}</p>

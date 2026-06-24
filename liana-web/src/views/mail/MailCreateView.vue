@@ -4,7 +4,11 @@
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="card-title">收寄录入</h3>
-          <p class="mt-1 text-sm text-gray-500">只录入收寄必需信息，邮件范围区分国内和国际。</p>
+          <p class="mt-1 text-sm text-gray-500">录入寄件人、收件人、邮件类型和重量信息，提交后生成邮件台账。</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn btn-secondary" @click="fillExample('DOMESTIC')">国内示例</button>
+          <button type="button" class="btn btn-secondary" @click="fillExample('INTERNATIONAL')">国际示例</button>
         </div>
       </div>
 
@@ -20,7 +24,7 @@
         </select>
 
         <select v-if="isInternational" class="select col-span-2" v-model="form.destCountryCode">
-          <option value="">请选择寄达国</option>
+          <option value="">请选择寄达国家</option>
           <option v-for="item in countries" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
         </select>
 
@@ -40,17 +44,16 @@
 
         <select v-if="isInternational" class="select" v-model="form.serviceType">
           <option value="">请选择服务类型</option>
-          <option v-if="loadingServiceTypes" value="" disabled>Loading...</option>
+          <option v-if="loadingServiceTypes" value="" disabled>加载中...</option>
           <option v-for="item in serviceTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
         </select>
 
-        <input class="input" v-model.number="form.declaredValue" type="number" placeholder="申报价值(可选)" />
+        <input class="input" v-model.number="form.declaredValue" type="number" placeholder="申报价值（可选）" />
 
         <div class="col-span-2 flex gap-2">
           <button class="btn btn-primary" :disabled="submitting">
             {{ submitting ? '提交中...' : '提交收寄' }}
           </button>
-          <button class="btn btn-secondary" type="button" @click="fillDemo">填写示例</button>
         </div>
       </form>
     </div>
@@ -98,6 +101,44 @@ const form = reactive({
 
 const isInternational = computed(() => form.mailScope === 'INTERNATIONAL');
 
+function chooseCode(items, preferredCodes, fallback) {
+  for (const code of preferredCodes) {
+    if (items.find((item) => item.code === code)) {
+      return code;
+    }
+  }
+  return items[0]?.code || fallback;
+}
+
+async function fillExample(scope) {
+  form.mailScope = scope;
+
+  if (scope === 'INTERNATIONAL') {
+    await loadServiceTypes();
+  }
+
+  const isDomesticExample = scope === 'DOMESTIC';
+  Object.assign(form, {
+    mailTypeCode: chooseCode(mailTypes.value, isDomesticExample ? ['C', 'R', 'E'] : ['E', 'R', 'C'], isDomesticExample ? 'C' : 'E'),
+    mailScope: scope,
+    destCountryCode: isDomesticExample ? '' : chooseCode(countries.value.filter((item) => item.code !== 'LN'), ['JP', 'US', 'HK'], 'JP'),
+    senderFullName: isDomesticExample ? '林安' : '陈嘉明',
+    senderPhone: isDomesticExample ? '0900123456' : '0900888666',
+    senderIdType: 'NID',
+    senderIdNumber: isDomesticExample ? 'LN110101199001010018' : 'LN440305198806060022',
+    senderAddress: isDomesticExample ? '利亚纳纳莫阿市中央大道 18 号' : '利亚纳纳莫阿市海港路 6 号',
+    senderPostcode: isDomesticExample ? '10001' : '10003',
+    recipientFullName: isDomesticExample ? '周明' : 'Yuki Tanaka',
+    recipientPhone: isDomesticExample ? '0900654321' : '+81-3-1234-5678',
+    recipientAddress: isDomesticExample ? '利亚纳塔维里市邮政街 12 号' : '1-2-3 Marunouchi, Chiyoda-ku, Tokyo',
+    recipientPostcode: isDomesticExample ? '10002' : '1000005',
+    weightGrams: isDomesticExample ? 320 : 480,
+    declaredValue: isDomesticExample ? null : 120,
+    serviceType: isDomesticExample ? '' : chooseCode(serviceTypes.value, ['AIR', 'SAL', 'SEA'], 'AIR'),
+  });
+  result.value = `已填充${isDomesticExample ? '国内' : '国际'}示例，可直接提交收寄。`;
+}
+
 async function loadMailTypes() {
   mailTypes.value = await mailApi.listMailTypes(session.token);
   if (!form.mailTypeCode && mailTypes.value.length) {
@@ -137,16 +178,16 @@ async function submit() {
   submitting.value = true;
   try {
     if (!form.mailTypeCode || !form.senderFullName || !form.senderPhone || !form.senderAddress || !form.recipientFullName || !form.recipientPhone || !form.recipientAddress) {
-      result.value = '请补全收寄必需信息';
+      result.value = '请补全收寄必填信息';
       return;
     }
     if (isInternational.value && !form.destCountryCode) {
-      result.value = '国际邮件必须选择寄达国';
+      result.value = '国际邮件必须选择寄达国家';
       return;
     }
 
     if (isInternational.value && !form.serviceType) {
-      result.value = 'International mail requires a service type';
+      result.value = '国际邮件必须选择服务类型';
       return;
     }
 
@@ -181,28 +222,6 @@ async function submit() {
   } finally {
     submitting.value = false;
   }
-}
-
-function fillDemo() {
-  Object.assign(form, {
-    mailTypeCode: 'R',
-    mailScope: 'DOMESTIC',
-    destCountryCode: '',
-    senderFullName: 'Demo Sender',
-    senderPhone: '0900123456',
-    senderIdType: 'NID',
-    senderIdNumber: 'NID0001',
-    senderAddress: 'A1 Plaza, Namoa',
-    senderPostcode: '10001',
-    recipientFullName: 'Demo Recipient',
-    recipientPhone: '0900654321',
-    recipientAddress: 'B1 Central, Namoa',
-    recipientPostcode: '10002',
-    weightGrams: 120,
-    declaredValue: null,
-    serviceType: 'AIR',
-  });
-  result.value = '';
 }
 
 onMounted(async () => {

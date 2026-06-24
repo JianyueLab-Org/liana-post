@@ -1,18 +1,18 @@
-﻿INSERT INTO `role` (`code`, `name`, `description`, `status`) VALUES
-('CLERK', '钀ヤ笟鍛?, '钀ヤ笟鍛?, 1),
-('MANAGER', '缁忕悊', '缁忕悊', 1),
-('SORTER', '灏佸彂鎿嶄綔鍛?, '灏佸彂鎿嶄綔鍛?, 1),
-('ADMIN', '绯荤粺绠＄悊鍛?, '绯荤粺绠＄悊鍛?, 1);
+INSERT INTO `role` (`code`, `name`, `description`, `status`) VALUES
+('CLERK', '邮局营业员', '负责邮件收寄、邮件查询和基础投递作业', 1),
+('MANAGER', '邮局经理', '负责网点业务管理、邮件查询和运营查看', 1),
+('SORTER', '转运中心操作员', '负责分拣、封发、交接和运输协同作业', 1),
+('ADMIN', '系统管理员', '负责用户、角色、权限和系统基础数据维护', 1);
 
 INSERT INTO `permission` (`code`, `name`, `description`, `status`) VALUES
-('MAIL_CREATE', '閭欢鏀跺瘎', '閭欢鏀跺瘎', 1),
-('MAIL_QUERY', '閭欢鏌ヨ', '閭欢鏌ヨ', 1),
-('TRACK_QUERY', '杞ㄨ抗鏌ヨ', '杞ㄨ抗鏌ヨ', 1),
-('TOKEN_ISSUE', 'Token绛惧彂', 'Token绛惧彂', 1),
-('USER_ADMIN', '鐢ㄦ埛绠＄悊', '鐢ㄦ埛绠＄悊', 1),
-('ROLE_ADMIN', '瑙掕壊绠＄悊', '瑙掕壊绠＄悊', 1),
-('DISPATCH_BAG_CREATE', '鎬诲寘鍒涘缓', '鎬诲寘鍒涘缓', 1),
-('DISPATCH_BAG_HANDOFF', '鎬诲寘浜ゆ帴', '鎬诲寘浜ゆ帴', 1);
+('MAIL_CREATE', '邮件收寄', '创建邮件并生成邮件台账', 1),
+('MAIL_QUERY', '邮件查询', '查询邮件台账、详情和投递数据', 1),
+('TRACK_QUERY', '轨迹查询', '查询邮件全生命周期轨迹', 1),
+('TOKEN_ISSUE', 'Token签发', '签发和校验登录令牌', 1),
+('USER_ADMIN', '用户管理', '维护用户账号和所属角色', 1),
+('ROLE_ADMIN', '角色管理', '查看角色和权限配置', 1),
+('DISPATCH_BAG_CREATE', '总包创建', '创建总包和封发批次', 1),
+('DISPATCH_BAG_HANDOFF', '总包交接', '处理总包交接确认', 1);
 
 INSERT INTO `user` (`username`, `password_hash`, `display_name`, `facility_code`, `phone`, `email`, `status`) VALUES
 ('clerk001', '$2a$10$wX6zY2Zqk8YgNq2h4XvY5e0mQ0X4uX3x9W0pK2d1qZx1vY5N9r9aG', 'Namoa Clerk', 'B1', '13800000001', 'clerk001@liana.post', 1),

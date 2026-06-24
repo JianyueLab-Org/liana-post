@@ -43,6 +43,16 @@ const events = ref([]);
 
 onMounted(async () => {
   detail.value = await mailApi.detail(props.id, session.token);
-  events.value = await trackingApi.listEventsByWaybill(props.id, session.token);
+  const payload = await trackingApi.listEventsByWaybill(props.id, session.token);
+  events.value = payload
+    .slice()
+    .sort((a, b) => String(a.eventTime || '').localeCompare(String(b.eventTime || '')))
+    .map((item) => ({
+      eventTime: item.eventTime,
+      nodeName: item.locationText || item.facilityName || item.facilityCode || '未知节点',
+      eventType: item.eventType,
+      stageName: item.stageName,
+      description: item.displayText || item.payload || item.sourceService || '',
+    }));
 });
 </script>

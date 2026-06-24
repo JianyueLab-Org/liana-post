@@ -8,11 +8,28 @@ spring:
       config:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
         file-extension: yaml
+    sentinel:
+      eager: true
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+        port: ${SENTINEL_TRANSPORT_PORT:8719}
+      scg:
+        fallback:
+          mode: response
+          response-status: 429
+          content-type: application/json
+          response-body: '{"code":429,"message":"请求过于频繁，请稍后再试","data":null}'
     gateway:
       discovery:
         locator:
           enabled: true
       routes:
+        - id: transport-alias
+          uri: ${TRANSPORT_ROUTE_URI:http://127.0.0.1:8086}
+          predicates:
+            - Path=/liana-transport-service/**
+          filters:
+            - StripPrefix=1
         - id: tracking-alias
           uri: lb://liana-tracking-service
           predicates:
@@ -37,3 +54,9 @@ gateway:
       - /liana-auth-service/api/auth/login
       - /actuator/health
       - /actuator/info
+liana:
+  sentinel:
+    gateway:
+      route-id: ${SENTINEL_GATEWAY_ROUTE_ID:sorting-alias}
+      qps: ${SENTINEL_GATEWAY_QPS:2}
+      block-message: ${SENTINEL_GATEWAY_BLOCK_MESSAGE:请求过于频繁，请稍后再试}

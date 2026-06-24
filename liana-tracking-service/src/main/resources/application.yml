@@ -6,9 +6,9 @@ spring:
   application:
     name: liana-tracking-service
   datasource:
-    url: jdbc:mysql://localhost:3306/tracking_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: wuyujie
+    url: ${TRACKING_DB_URL:jdbc:mysql://127.0.0.1:3306/tracking_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${TRACKING_DB_USERNAME:${DB_USERNAME:root}}
+    password: ${TRACKING_DB_PASSWORD:${DB_PASSWORD:wuyujie}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -17,8 +17,8 @@ spring:
       database: ${REDIS_DB:0}
   sql:
     init:
-      mode: always
-      schema-locations: file:${user.dir}/db/tracking_db.sql
+      mode: ${TRACKING_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
+      schema-locations: ${TRACKING_SQL_SCHEMA_LOCATIONS:file:${user.dir}/db/tracking_db.sql}
   cloud:
     nacos:
       discovery:
@@ -26,6 +26,11 @@ spring:
       config:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
         file-extension: yaml
+    sentinel:
+      eager: true
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+        port: ${SENTINEL_TRANSPORT_PORT:8722}
 server:
   port: 8085
 mybatis-plus:

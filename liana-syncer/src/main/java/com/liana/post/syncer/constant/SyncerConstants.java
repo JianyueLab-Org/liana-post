@@ -9,6 +9,7 @@ public interface SyncerConstants {
     String BIZ_TYPE_SYNC_TASK = "SYNC_TASK";
     String BIZ_TYPE_RETRY = "RETRY";
 
+    String STATUS_NEW = "NEW";
     String STATUS_PENDING = "PENDING";
     String STATUS_PROCESSING = "PROCESSING";
     String STATUS_SUCCESS = "SUCCESS";

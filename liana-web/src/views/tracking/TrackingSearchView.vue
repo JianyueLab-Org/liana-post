@@ -36,9 +36,10 @@ const events = ref([]);
 function mapEvent(item) {
   return {
     eventTime: item.eventTime,
-    nodeName: item.facilityName || item.facilityCode || '未知节点',
+    nodeName: item.locationText || item.facilityName || item.facilityCode || '未知节点',
     eventType: item.eventType,
-    description: item.payload || item.sourceService || item.operatorName || '',
+    stageName: item.stageName,
+    description: item.displayText || item.payload || item.sourceService || item.operatorName || '',
   };
 }
 

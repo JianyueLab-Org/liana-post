@@ -47,8 +47,8 @@ DROP TABLE IF EXISTS `transport_route`;
 CREATE TABLE `transport_route`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `route_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `origin_facility_id` bigint NOT NULL,
-  `destination_facility_id` bigint NOT NULL,
+  `origin_facility_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `destination_facility_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `transport_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `estimated_hours` decimal(10, 2) NULL DEFAULT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,

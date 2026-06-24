@@ -267,6 +267,8 @@ public class OmsServiceImpl implements OmsService {
     @Override
     @Transactional
     public MailResponse deliverMail(String waybillNo, String facilityCode) {
+        MailEntity pendingMail = findMailOrThrow(waybillNo);
+        assertPendingDeliveryMail(pendingMail, facilityCode);
         MailEntity mail = omsRepository.updateMailStatus(waybillNo, LogisticsConstants.MAIL_STATUS_DELIVERED, facilityCode);
         recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_DELIVERED, mail.getCurrentFacilityCode(), null, null, "{}");
         evictMailCache(waybillNo);
@@ -277,6 +279,8 @@ public class OmsServiceImpl implements OmsService {
     @Override
     @Transactional
     public MailResponse departExchangeMail(String waybillNo, String facilityCode) {
+        MailEntity pendingMail = findMailOrThrow(waybillNo);
+        assertPendingDeliveryMail(pendingMail, facilityCode);
         MailEntity mail = omsRepository.updateMailStatus(waybillNo, LogisticsConstants.MAIL_STATUS_DISPATCHED, facilityCode);
         recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_DISPATCHED, mail.getCurrentFacilityCode(), null, null, "{}");
         evictMailCache(waybillNo);
@@ -298,7 +302,7 @@ public class OmsServiceImpl implements OmsService {
                 .filter(pack -> facilityCode == null || facilityCode.isBlank() || matches(pack.getCurrentFacilityCode(), facilityCode) || matches(pack.getOriginFacilityCode(), facilityCode))
                 .toList();
         long pendingDelivery = mails.stream()
-                .filter(mail -> LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus()) || LogisticsConstants.MAIL_STATUS_SORTED.equals(mail.getStatus()))
+                .filter(this::isPendingDeliveryMail)
                 .count();
         long international = mails.stream().filter(mail -> "INTERNATIONAL".equals(mail.getMailScope())).count();
 
@@ -306,7 +310,7 @@ public class OmsServiceImpl implements OmsService {
         response.setTitle("邮件数据");
         response.setScope(scopeLabel(facilityCode));
         response.addMetric("邮件总量", mails.size(), "mail 表", "info")
-                .addMetric("待投递", pendingDelivery, "ARRIVED / SORTED", "warning")
+                .addMetric("待投递", pendingDelivery, "READY_FOR_DELIVERY", "warning")
                 .addMetric("总包数", packages.size(), "package_id 聚合", "neutral")
                 .addMetric("国际邮件", international, "mail_scope = INTERNATIONAL", "success");
         response.addBreakdown("邮件状态", countBy(mails.stream().map(MailResponse::getStatus).collect(Collectors.toList())));
@@ -320,6 +324,42 @@ public class OmsServiceImpl implements OmsService {
 
     private MailEntity findMailOrThrow(String barcode) {
         return omsRepository.findMailByWaybillNo(normalize(barcode)).orElseThrow(() -> new BusinessException(404, "mail not found"));
+    }
+
+    private void assertPendingDeliveryMail(MailEntity mail, String facilityCode) {
+        if (facilityCode == null || facilityCode.isBlank()) {
+            throw new BusinessException(400, "facility code is required");
+        }
+        if (!isPendingDeliveryMail(mail)) {
+            throw new BusinessException(400, "mail is not ready for delivery");
+        }
+        if (!matches(mail.getCurrentFacilityCode(), facilityCode)) {
+            throw new BusinessException(403, "mail does not belong to current facility");
+        }
+    }
+
+    private boolean isPendingDeliveryMail(MailEntity mail) {
+        if (mail == null) {
+            return false;
+        }
+        boolean readyStatus = LogisticsConstants.MAIL_STATUS_READY_FOR_DELIVERY.equals(mail.getStatus())
+                || LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus());
+        return readyStatus
+                && (mail.getPackageId() == null || mail.getPackageId().isBlank())
+                && (mail.getBagNo() == null || mail.getBagNo().isBlank())
+                && (mail.getCurrentSlot() == null || mail.getCurrentSlot().isBlank());
+    }
+
+    private boolean isPendingDeliveryMail(MailResponse mail) {
+        if (mail == null) {
+            return false;
+        }
+        boolean readyStatus = LogisticsConstants.MAIL_STATUS_READY_FOR_DELIVERY.equals(mail.getStatus())
+                || LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus());
+        return readyStatus
+                && (mail.getPackageId() == null || mail.getPackageId().isBlank())
+                && (mail.getBagNo() == null || mail.getBagNo().isBlank())
+                && (mail.getCurrentSlot() == null || mail.getCurrentSlot().isBlank());
     }
 
     private void syncBagToDispatch(String bagNo, String currentFacilityCode, List<String> waybillNos) {

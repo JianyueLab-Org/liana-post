@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,6 +37,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/oms")
 public class OmsController {
+
+    private static final String HEADER_FACILITY_CODE = "X-Facility-Code";
 
     private final OmsService omsService;
     private final OmsRepository omsRepository;
@@ -76,8 +79,9 @@ public class OmsController {
     }
 
     @GetMapping("/packages/pending-delivery")
-    public Result<List<MailResponse>> listPendingDeliveryMails(@RequestParam(name = "currentFacilityCode", required = false) String currentFacilityCode) {
-        return Result.ok(omsService.listPendingDeliveryMails(currentFacilityCode));
+    public Result<List<MailResponse>> listPendingDeliveryMails(@RequestParam(name = "currentFacilityCode", required = false) String currentFacilityCode,
+                                                               @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
+        return Result.ok(omsService.listPendingDeliveryMails(resolveFacilityCode(currentFacilityCode, headerFacilityCode)));
     }
 
     @GetMapping("/mails/status/{status}")
@@ -111,8 +115,9 @@ public class OmsController {
     }
 
     @PostMapping("/packages/receive-open")
-    public Result<Integer> receiveAndOpenPackage(@Valid @RequestBody MailPackageActionRequest request) {
-        return Result.ok(omsService.receiveAndOpenMailPackage(request.getPackageId(), request.getCurrentFacilityCode()));
+    public Result<Integer> receiveAndOpenPackage(@Valid @RequestBody MailPackageActionRequest request,
+                                                 @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
+        return Result.ok(omsService.receiveAndOpenMailPackage(request.getPackageId(), resolveFacilityCode(request.getCurrentFacilityCode(), headerFacilityCode)));
     }
 
     @GetMapping("/slots")
@@ -126,13 +131,17 @@ public class OmsController {
     }
 
     @PostMapping("/mails/{waybillNo}/deliver")
-    public Result<MailResponse> deliverMail(@PathVariable("waybillNo") String waybillNo, @RequestParam(name = "facilityCode", required = false) String facilityCode) {
-        return Result.ok(omsService.deliverMail(waybillNo, facilityCode));
+    public Result<MailResponse> deliverMail(@PathVariable("waybillNo") String waybillNo,
+                                            @RequestParam(name = "facilityCode", required = false) String facilityCode,
+                                            @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
+        return Result.ok(omsService.deliverMail(waybillNo, resolveFacilityCode(facilityCode, headerFacilityCode)));
     }
 
     @PostMapping("/mails/{waybillNo}/exchange-depart")
-    public Result<MailResponse> departExchangeMail(@PathVariable("waybillNo") String waybillNo, @RequestParam(name = "facilityCode", required = false) String facilityCode) {
-        return Result.ok(omsService.departExchangeMail(waybillNo, facilityCode));
+    public Result<MailResponse> departExchangeMail(@PathVariable("waybillNo") String waybillNo,
+                                                   @RequestParam(name = "facilityCode", required = false) String facilityCode,
+                                                   @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
+        return Result.ok(omsService.departExchangeMail(waybillNo, resolveFacilityCode(facilityCode, headerFacilityCode)));
     }
 
     @GetMapping({"/mail-types", "/types", "/mail-types/list"})
@@ -156,7 +165,19 @@ public class OmsController {
     }
 
     @GetMapping("/dashboard/summary")
-    public Result<DashboardSummaryResponse> dashboardSummary(@RequestParam(name = "facilityCode", required = false) String facilityCode) {
-        return Result.ok(omsService.dashboardSummary(facilityCode));
+    public Result<DashboardSummaryResponse> dashboardSummary(@RequestParam(name = "facilityCode", required = false) String facilityCode,
+                                                             @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
+        return Result.ok(omsService.dashboardSummary(resolveFacilityCode(facilityCode, headerFacilityCode)));
+    }
+
+    private String resolveFacilityCode(String explicitFacilityCode, String headerFacilityCode) {
+        if (hasText(explicitFacilityCode)) {
+            return explicitFacilityCode.trim();
+        }
+        return hasText(headerFacilityCode) ? headerFacilityCode.trim() : null;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

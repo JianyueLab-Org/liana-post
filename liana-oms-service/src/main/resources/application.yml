@@ -5,9 +5,9 @@ spring:
   application:
     name: liana-oms-service
   datasource:
-    url: jdbc:mysql://localhost:3306/oms_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: wuyujie
+    url: ${OMS_DB_URL:jdbc:mysql://127.0.0.1:3306/oms_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${OMS_DB_USERNAME:${DB_USERNAME:root}}
+    password: ${OMS_DB_PASSWORD:${DB_PASSWORD:wuyujie}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -16,22 +16,29 @@ spring:
       database: ${REDIS_DB:0}
   sql:
     init:
-      mode: embedded # may delete later
+      mode: ${OMS_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
       schema-locations: classpath:schema.sql
       data-locations: classpath:data.sql
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
       config:
-        server-addr: 127.0.0.1:8848
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
         file-extension: yaml
         import-check:
           enabled: false
+    sentinel:
+      eager: true
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+        port: ${SENTINEL_TRANSPORT_PORT:8721}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 feign:
+  sentinel:
+    enabled: true
   okhttp:
     enabled: false

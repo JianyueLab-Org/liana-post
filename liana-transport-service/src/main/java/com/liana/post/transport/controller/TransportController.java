@@ -37,12 +37,12 @@ public class TransportController {
     }
 
     @PutMapping("/assets/{code}")
-    public Result<TransportAssetEntity> updateAsset(@PathVariable String code, @Valid @RequestBody TransportAssetRequest request) {
+    public Result<TransportAssetEntity> updateAsset(@PathVariable("code") String code, @Valid @RequestBody TransportAssetRequest request) {
         return Result.ok(transportService.updateAsset(code, request));
     }
 
     @GetMapping("/assets/{code}")
-    public Result<TransportAssetEntity> getAsset(@PathVariable String code) {
+    public Result<TransportAssetEntity> getAsset(@PathVariable("code") String code) {
         return Result.ok(transportService.getAsset(code));
     }
 
@@ -60,12 +60,12 @@ public class TransportController {
     }
 
     @PutMapping("/routes/{routeCode}")
-    public Result<TransportRouteEntity> updateRoute(@PathVariable String routeCode, @Valid @RequestBody TransportRouteRequest request) {
+    public Result<TransportRouteEntity> updateRoute(@PathVariable("routeCode") String routeCode, @Valid @RequestBody TransportRouteRequest request) {
         return Result.ok(transportService.updateRoute(routeCode, request));
     }
 
     @GetMapping("/routes/{routeCode}")
-    public Result<TransportRouteEntity> getRoute(@PathVariable String routeCode) {
+    public Result<TransportRouteEntity> getRoute(@PathVariable("routeCode") String routeCode) {
         return Result.ok(transportService.getRoute(routeCode));
     }
 
@@ -84,12 +84,12 @@ public class TransportController {
     }
 
     @PutMapping("/schedules/{scheduleCode}")
-    public Result<TransportScheduleEntity> updateSchedule(@PathVariable String scheduleCode, @Valid @RequestBody TransportScheduleRequest request) {
+    public Result<TransportScheduleEntity> updateSchedule(@PathVariable("scheduleCode") String scheduleCode, @Valid @RequestBody TransportScheduleRequest request) {
         return Result.ok(transportService.updateSchedule(scheduleCode, request));
     }
 
     @GetMapping("/schedules/{scheduleCode}")
-    public Result<TransportScheduleEntity> getSchedule(@PathVariable String scheduleCode) {
+    public Result<TransportScheduleEntity> getSchedule(@PathVariable("scheduleCode") String scheduleCode) {
         return Result.ok(transportService.getSchedule(scheduleCode));
     }
 
@@ -112,12 +112,12 @@ public class TransportController {
     }
 
     @PostMapping("/tasks/{taskCode}/status")
-    public Result<TransportTaskEntity> updateTaskStatus(@PathVariable String taskCode, @Valid @RequestBody TransportTaskStatusRequest request) {
+    public Result<TransportTaskEntity> updateTaskStatus(@PathVariable("taskCode") String taskCode, @Valid @RequestBody TransportTaskStatusRequest request) {
         return Result.ok(transportService.updateTaskStatus(taskCode, request));
     }
 
     @GetMapping("/tasks/{taskCode}")
-    public Result<TransportTaskEntity> getTask(@PathVariable String taskCode) {
+    public Result<TransportTaskEntity> getTask(@PathVariable("taskCode") String taskCode) {
         return Result.ok(transportService.getTask(taskCode));
     }
 

@@ -4,11 +4,11 @@
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="card-title">用户管理</h3>
-          <p class="mt-1 text-sm text-gray-500">真实接口：`/api/auth/system/users`、`/api/auth/system/project/init`</p>
+          <p class="mt-1 text-sm text-gray-500">维护用户账号、所属网点、角色与启用状态。</p>
         </div>
         <div class="flex gap-2">
           <button class="btn btn-secondary" :disabled="loading" @click="loadUsers">刷新</button>
-          <button class="btn btn-primary" :disabled="loading" @click="runInit">项目初始化</button>
+          <button class="btn btn-primary" :disabled="loading" @click="runInit">初始化基础权限</button>
         </div>
       </div>
 
@@ -25,12 +25,11 @@
         <input v-model="form.facilityCode" class="input" placeholder="网点编码" />
         <button class="btn btn-primary" :disabled="loading || !canCreate" @click="createUser">新增用户</button>
       </div>
-      <p class="mt-2 text-xs text-gray-400">创建用户默认使用当前表单中的密码；项目初始化会创建 `testclerk/testadmin`，密码统一为 `123456`。</p>
     </div>
 
     <GenericListView :columns="columns" :rows="users" :status-options="statusOptions">
       <template #title>用户列表</template>
-      <template #subtitle>真实后端返回的用户、角色和权限</template>
+      <template #subtitle>用户通过角色获得权限，符合 User-Role-Permission 的 RBAC 模型。</template>
       <template #actions="{ row }">
         <button class="btn btn-secondary" @click="open(row)">详情</button>
         <button class="btn btn-ghost" @click="fillReset(row)">重置密码</button>
@@ -41,7 +40,18 @@
       <div class="grid-two">
         <div class="card p-4">
           <p class="text-sm text-gray-500">基础信息</p>
-          <pre class="mt-3 whitespace-pre-wrap text-sm text-gray-700">{{ current }}</pre>
+          <dl class="mt-3 space-y-2 text-sm text-gray-700">
+            <div><dt class="inline text-gray-400">用户名：</dt><dd class="inline">{{ current?.username || '-' }}</dd></div>
+            <div><dt class="inline text-gray-400">姓名：</dt><dd class="inline">{{ current?.displayName || '-' }}</dd></div>
+            <div><dt class="inline text-gray-400">角色：</dt><dd class="inline">{{ current?.role || '-' }}</dd></div>
+            <div><dt class="inline text-gray-400">网点：</dt><dd class="inline">{{ current?.facilityCode || '-' }}</dd></div>
+            <div><dt class="inline text-gray-400">状态：</dt><dd class="inline">{{ current?.status }}</dd></div>
+          </dl>
+          <p class="mt-4 text-sm text-gray-500">权限码</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span v-for="item in currentPermissions" :key="item" class="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{{ item }}</span>
+            <span v-if="!currentPermissions.length" class="text-sm text-gray-400">暂无权限</span>
+          </div>
         </div>
         <div class="card p-4 space-y-3">
           <p class="text-sm text-gray-500">重置密码</p>
@@ -52,8 +62,8 @@
       </div>
     </DetailDrawer>
 
-    <DetailDrawer :open="initDrawerOpen" title="项目初始化结果" subtitle="/api/auth/system/project/init" @close="initDrawerOpen = false">
-      <pre class="whitespace-pre-wrap text-sm text-gray-700">{{ initResult }}</pre>
+    <DetailDrawer :open="initDrawerOpen" title="权限初始化结果" subtitle="角色与权限基础数据" @close="initDrawerOpen = false">
+      <pre class="whitespace-pre-wrap text-sm text-gray-700">{{ initResultText }}</pre>
     </DetailDrawer>
   </div>
 </template>
@@ -88,6 +98,8 @@ const form = reactive({ username: '', password: '123456', displayName: '', facil
 const resetForm = reactive({ username: '', newPassword: '123456' });
 
 const canCreate = computed(() => Boolean(form.username && form.password && form.displayName && form.facilityCode && form.roleCode));
+const currentPermissions = computed(() => current.value?.permissions || []);
+const initResultText = computed(() => (initResult.value ? JSON.stringify(initResult.value, null, 2) : ''));
 
 async function loadUsers() {
   loading.value = true;

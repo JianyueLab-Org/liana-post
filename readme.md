@@ -1,1 +1,2 @@
 - 这是一个实验性邮政系统，开发中
+- how to run? type:docker compose -f docker-compose.demo.yml up -d --build

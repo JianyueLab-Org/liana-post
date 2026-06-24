@@ -29,8 +29,11 @@ import TransportTasksView from '../views/transport/TransportTasksView.vue';
 import SystemUsersView from '../views/system/SystemUsersView.vue';
 import SystemRolesView from '../views/system/SystemRolesView.vue';
 import SystemPermissionsView from '../views/system/SystemPermissionsView.vue';
+import SystemSentinelView from '../views/system/SystemSentinelView.vue';
 import SyncOutboxView from '../views/sync/SyncOutboxView.vue';
 import SyncTasksView from '../views/sync/SyncTasksView.vue';
+import SyncOverviewView from '../views/sync/SyncOverviewView.vue';
+import SyncRetriesView from '../views/sync/SyncRetriesView.vue';
 import CountryCatalogView from '../views/catalog/CountryCatalogView.vue';
 import ServiceTypeCatalogView from '../views/catalog/ServiceTypeCatalogView.vue';
 import PostOfficeDeliveryView from '../views/delivery/PostOfficeDeliveryView.vue';
@@ -70,16 +73,19 @@ const routes = [
       { path: '/transport/routes', name: 'transport-routes', component: TransportRoutesView, meta: { title: '运输线路' } },
       { path: '/transport/schedules', name: 'transport-schedules', component: TransportSchedulesView, meta: { title: '运输计划' } },
       { path: '/transport/tasks', name: 'transport-tasks', component: TransportTasksView, meta: { title: '运输任务' } },
-      { path: '/system/users', name: 'system-users', component: SystemUsersView, meta: { title: '用户管理' } },
-      { path: '/system/roles', name: 'system-roles', component: SystemRolesView, meta: { title: '角色管理' } },
-      { path: '/system/permissions', name: 'system-permissions', component: SystemPermissionsView, meta: { title: '权限管理' } },
+      { path: '/system/users', name: 'system-users', component: SystemUsersView, meta: { title: '用户管理', action: 'USER_ADMIN' } },
+      { path: '/system/roles', name: 'system-roles', component: SystemRolesView, meta: { title: '角色管理', action: 'ROLE_ADMIN' } },
+      { path: '/system/permissions', name: 'system-permissions', component: SystemPermissionsView, meta: { title: '权限管理', action: 'ROLE_ADMIN' } },
+      { path: '/system/sentinel', name: 'system-sentinel', component: SystemSentinelView, meta: { title: 'Sentinel 监控', action: 'ROLE_ADMIN' } },
       { path: '/catalog/countries', name: 'catalog-countries', component: CountryCatalogView, meta: { title: '国家管理' } },
       { path: '/catalog/service-types', name: 'catalog-service-types', component: ServiceTypeCatalogView, meta: { title: '服务类型' } },
       { path: '/delivery/postoffice', name: 'delivery-postoffice', component: PostOfficeDeliveryView, meta: { title: '投递工作台', action: 'MAIL_QUERY' } },
       { path: '/delivery/print', name: 'delivery-print', component: PostOfficeDeliveryPrintView, meta: { title: '打印投递单', action: 'MAIL_QUERY' } },
       { path: '/delivery/packages', name: 'delivery-packages', component: PostOfficePackagesView, meta: { title: '接收总包', action: 'MAIL_QUERY' } },
+      { path: '/sync/overview', name: 'sync-overview', component: SyncOverviewView, meta: { title: '同步总览' } },
       { path: '/sync/outbox', name: 'sync-outbox', component: SyncOutboxView, meta: { title: 'Outbox' } },
       { path: '/sync/tasks', name: 'sync-tasks', component: SyncTasksView, meta: { title: '任务监控' } },
+      { path: '/sync/retries', name: 'sync-retries', component: SyncRetriesView, meta: { title: '重试记录' } },
       { path: '/mail', redirect: '/mail/list' },
       { path: '/dispatch', redirect: '/dispatch/bags' },
       { path: '/sorting', redirect: '/sorting/receive' },
@@ -88,8 +94,8 @@ const routes = [
       { path: '/transport', redirect: '/transport/assets' },
       { path: '/system', redirect: '/system/users' },
       { path: '/catalog', redirect: '/catalog/countries' },
-      { path: '/delivery', redirect: '/delivery/print' },
-      { path: '/sync', redirect: '/sync/outbox' },
+      { path: '/delivery', redirect: '/delivery/packages' },
+      { path: '/sync', redirect: '/sync/overview' },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
@@ -105,6 +111,12 @@ router.beforeEach(async (to) => {
   }
   if (!session.token) return '/login';
   if (!session.ready) await session.bootstrap();
+  if (to.path.startsWith('/sorting') && !session.isSortingFacility) {
+    return '/dashboard';
+  }
+  if (to.meta.action && !session.hasAction(to.meta.action)) {
+    return '/dashboard';
+  }
   if (to.path === '/sorting' || to.path === '/sorting/') {
     return session.isInternationalGateway ? '/sorting/export' : '/sorting/receive';
   }

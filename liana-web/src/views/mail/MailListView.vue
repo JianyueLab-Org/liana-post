@@ -43,7 +43,7 @@ import { mailApi } from '../../lib/api';
 
 const session = useSessionStore();
 const rows = ref([]);
-const statusOptions = ['CREATED', 'ACCEPTED', 'SORTED', 'DISPATCHED', 'ARRIVED', 'DELIVERED', 'RETURNED'];
+const statusOptions = ['CREATED', 'ACCEPTED', 'SORTED', 'DISPATCHED', 'ARRIVED', 'READY_FOR_DELIVERY', 'DELIVERED', 'RETURNED'];
 const columns = [
   { key: 'waybillNo', label: '运单号' },
   { key: 'senderFullName', label: '寄件人' },

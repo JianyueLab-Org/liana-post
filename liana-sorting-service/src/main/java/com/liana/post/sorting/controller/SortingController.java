@@ -61,6 +61,13 @@ public class SortingController {
         return Result.ok(sortingService.reBag(request));
     }
 
+    @GetMapping("/unpack-preview")
+    public Result<SortingUnpackPreviewResponse> previewUnpackItems(
+            @RequestParam("packageNo") String packageNo,
+            @RequestParam(name = "manifestNo", required = false) String manifestNo) {
+        return Result.ok(sortingService.previewUnpackItems(packageNo, manifestNo));
+    }
+
     @GetMapping("/slots")
     public Result<List<SortingSlotSummaryResponse>> listSlots(@RequestParam(name = "stationCode", required = false) String stationCode) {
         return Result.ok(sortingService.listSlotSummaries(stationCode));

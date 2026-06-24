@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(name = "liana-oms-service", contextId = "sortingOmsClient", url = "${oms.service.url:}")
+@FeignClient(name = "liana-oms-service", contextId = "sortingOmsClient", url = "${oms.service.url:}", fallbackFactory = OmsClientFallbackFactory.class)
 public interface OmsClient {
     @GetMapping("/api/oms/mails/{waybillNo}")
     Result<MailResponse> getMail(@PathVariable("waybillNo") String waybillNo);

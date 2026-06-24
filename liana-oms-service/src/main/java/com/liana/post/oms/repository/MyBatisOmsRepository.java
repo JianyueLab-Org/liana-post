@@ -44,6 +44,7 @@ public class MyBatisOmsRepository implements OmsRepository {
             LogisticsConstants.MAIL_STATUS_SORTED,
             LogisticsConstants.MAIL_STATUS_DISPATCHED,
             LogisticsConstants.MAIL_STATUS_ARRIVED,
+            LogisticsConstants.MAIL_STATUS_READY_FOR_DELIVERY,
             LogisticsConstants.MAIL_STATUS_DELIVERED,
             LogisticsConstants.MAIL_STATUS_RETURNED
     );
@@ -268,12 +269,20 @@ public class MyBatisOmsRepository implements OmsRepository {
 
     @Override
     public List<MailEntity> findPendingDeliveryMails(String currentFacilityCode) {
-        LambdaQueryWrapper<MailEntity> wrapper = new LambdaQueryWrapper<MailEntity>()
-                .in(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_ARRIVED, LogisticsConstants.MAIL_STATUS_SORTED, LogisticsConstants.MAIL_STATUS_DISPATCHED)
-                .orderByDesc(MailEntity::getUpdatedAt);
-        if (StringUtils.hasText(currentFacilityCode)) {
-            wrapper.eq(MailEntity::getCurrentFacilityCode, currentFacilityCode.trim().toUpperCase());
+        if (!StringUtils.hasText(currentFacilityCode)) {
+            return List.of();
         }
+        String normalizedFacilityCode = currentFacilityCode.trim().toUpperCase();
+        LambdaQueryWrapper<MailEntity> wrapper = new LambdaQueryWrapper<MailEntity>()
+                .and(condition -> condition.isNull(MailEntity::getPackageId).or().eq(MailEntity::getPackageId, ""))
+                .and(condition -> condition.isNull(MailEntity::getBagNo).or().eq(MailEntity::getBagNo, ""))
+                .and(condition -> condition.isNull(MailEntity::getCurrentSlot).or().eq(MailEntity::getCurrentSlot, ""))
+                .eq(MailEntity::getCurrentFacilityCode, normalizedFacilityCode)
+                .and(condition -> condition
+                        .eq(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_READY_FOR_DELIVERY)
+                        .or()
+                        .eq(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_ARRIVED))
+                .orderByDesc(MailEntity::getUpdatedAt);
         return mailMapper.selectList(wrapper);
     }
 
@@ -323,16 +332,19 @@ public class MyBatisOmsRepository implements OmsRepository {
             throw new BusinessException(404, "package not found: " + normalizedPackageId);
         }
         int updated = 0;
+        String normalizedFacilityCode = StringUtils.hasText(currentFacilityCode) ? currentFacilityCode.trim().toUpperCase() : null;
         for (MailEntity mail : mails) {
-            mail.setPackageId(null);
-            mail.setBagNo(null);
-            if (StringUtils.hasText(currentFacilityCode)) {
-                mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+            LambdaUpdateWrapper<MailEntity> wrapper = new LambdaUpdateWrapper<MailEntity>()
+                    .eq(MailEntity::getId, mail.getId())
+                    .set(MailEntity::getPackageId, null)
+                    .set(MailEntity::getBagNo, null)
+                    .set(MailEntity::getCurrentSlot, null)
+                    .set(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_READY_FOR_DELIVERY)
+                    .set(MailEntity::getUpdatedAt, LocalDateTime.now());
+            if (normalizedFacilityCode != null) {
+                wrapper.set(MailEntity::getCurrentFacilityCode, normalizedFacilityCode);
             }
-            mail.setCurrentSlot(null);
-            mail.setStatus(LogisticsConstants.MAIL_STATUS_SORTED);
-            mail.setUpdatedAt(LocalDateTime.now());
-            if (mailMapper.updateById(mail) > 0) {
+            if (mailMapper.update(null, wrapper) > 0) {
                 updated++;
             }
         }
@@ -352,18 +364,36 @@ public class MyBatisOmsRepository implements OmsRepository {
     public MailEntity assignMailBag(String waybillNo, String bagNo, String currentFacilityCode) {
         MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
         if (StringUtils.hasText(bagNo)) {
-            mail.setBagNo(bagNo.trim());
+            String normalizedBagNo = bagNo.trim();
+            mail.setBagNo(normalizedBagNo);
+            mail.setPackageId(normalizedBagNo);
             mail.setStatus(LogisticsConstants.MAIL_STATUS_DISPATCHED);
+            if (StringUtils.hasText(currentFacilityCode)) {
+                mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+            }
+            mail.setUpdatedAt(LocalDateTime.now());
+            if (mailMapper.updateById(mail) <= 0) {
+                throw new BusinessException(500, "failed to assign mail bag");
+            }
         } else {
+            LambdaUpdateWrapper<MailEntity> wrapper = new LambdaUpdateWrapper<MailEntity>()
+                    .eq(MailEntity::getWaybillNo, mail.getWaybillNo())
+                    .set(MailEntity::getBagNo, null)
+                    .set(MailEntity::getPackageId, null)
+                    .set(MailEntity::getCurrentSlot, null)
+                    .set(MailEntity::getStatus, LogisticsConstants.MAIL_STATUS_SORTED)
+                    .set(MailEntity::getUpdatedAt, LocalDateTime.now());
+            if (StringUtils.hasText(currentFacilityCode)) {
+                wrapper.set(MailEntity::getCurrentFacilityCode, currentFacilityCode.trim().toUpperCase());
+                mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
+            }
+            if (mailMapper.update(null, wrapper) <= 0) {
+                throw new BusinessException(500, "failed to assign mail bag");
+            }
             mail.setBagNo(null);
+            mail.setPackageId(null);
+            mail.setCurrentSlot(null);
             mail.setStatus(LogisticsConstants.MAIL_STATUS_SORTED);
-        }
-        if (StringUtils.hasText(currentFacilityCode)) {
-            mail.setCurrentFacilityCode(currentFacilityCode.trim().toUpperCase());
-        }
-        mail.setUpdatedAt(LocalDateTime.now());
-        if (mailMapper.updateById(mail) <= 0) {
-            throw new BusinessException(500, "failed to assign mail bag");
         }
         return mail;
     }

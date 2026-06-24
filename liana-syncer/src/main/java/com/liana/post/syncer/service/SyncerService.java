@@ -1,15 +1,28 @@
 package com.liana.post.syncer.service;
 
 import com.liana.post.syncer.model.dto.SyncPlanDto;
+import com.liana.post.syncer.model.entity.OutboxMessageEntity;
+import com.liana.post.syncer.model.entity.RetryRecordEntity;
+import com.liana.post.syncer.model.entity.SyncTaskEntity;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 同步服务抽象。
  */
 public interface SyncerService {
 
-    void submitPlan(SyncPlanDto syncPlanDto);
+    List<OutboxMessageEntity> submitPlan(SyncPlanDto syncPlanDto);
 
-    void scanOutboxOnce();
+    int scanOutboxOnce();
 
-    void retryPendingTasks();
+    int retryPendingTasks();
+
+    List<OutboxMessageEntity> listOutboxMessages();
+
+    List<SyncTaskEntity> listSyncTasks();
+
+    List<RetryRecordEntity> listRetryRecords();
+
+    Map<String, Object> dashboard();
 }

@@ -2,20 +2,20 @@ const ROLE_MENU_RULES = {
   CLERK: {
     top: ['dashboard', 'mail', 'catalog', 'dispatch', 'sorting', 'tracking', 'delivery'],
     children: {
-      mail: ['MAIL_CREATE', 'MAIL_QUERY'],
+      mail: ['mail-create', 'mail-list'],
       catalog: ['catalog-countries', 'catalog-service-types'],
       dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
       sorting: ['sorting-unpack', 'sorting-route', 'sorting-rebag'],
-      delivery: ['delivery-postoffice', 'delivery-postoffice-packages'],
-      tracking: ['TRACK_QUERY'],
+      delivery: ['delivery-postoffice-packages', 'delivery-postoffice-print', 'delivery-postoffice'],
+      tracking: ['tracking-search', 'tracking-events'],
     },
   },
   MANAGER: {
     top: ['dashboard', 'mail', 'catalog', 'tracking', 'facility', 'transport', 'sorting'],
     children: {
-      mail: ['MAIL_CREATE', 'MAIL_QUERY'],
+      mail: ['mail-create', 'mail-list'],
       catalog: ['catalog-countries', 'catalog-service-types'],
-      tracking: ['TRACK_QUERY'],
+      tracking: ['tracking-search', 'tracking-events'],
       facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
       sorting: ['sorting-manifests', 'sorting-route'],
@@ -27,7 +27,7 @@ const ROLE_MENU_RULES = {
       catalog: ['catalog-countries', 'catalog-service-types'],
       dispatch: ['dispatch-bags', 'dispatch-batches', 'dispatch-create-bag', 'dispatch-handoff'],
       sorting: ['sorting-manifests', 'sorting-receive', 'sorting-unpack', 'sorting-route', 'sorting-export', 'sorting-rebag'],
-      tracking: ['TRACK_QUERY'],
+      tracking: ['tracking-search', 'tracking-events'],
       facility: ['facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
     },
@@ -38,8 +38,8 @@ const ROLE_MENU_RULES = {
       catalog: ['catalog-countries', 'catalog-service-types'],
       facility: ['facility-admin', 'facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
-      system: ['system-users', 'system-roles', 'system-permissions'],
-      sync: ['sync-outbox', 'sync-tasks'],
+      system: ['system-users', 'system-roles', 'system-permissions', 'system-sentinel'],
+      sync: ['sync-overview', 'sync-outbox', 'sync-tasks', 'sync-retries'],
     },
   },
 };
@@ -48,7 +48,7 @@ const MENU_LIBRARY = {
   dashboard: { id: 'dashboard', name: '工作台', path: '/dashboard', kind: 'link' },
   mail: {
     id: 'mail',
-    name: '收寄',
+    name: '邮件收寄',
     path: '/mail/create',
     kind: 'group',
     children: [
@@ -58,13 +58,13 @@ const MENU_LIBRARY = {
   },
   delivery: {
     id: 'delivery',
-    name: '投递',
-    path: '/delivery/postoffice',
+    name: '末端投递',
+    path: '/delivery/packages',
     kind: 'group',
     children: [
-      { id: 'delivery-postoffice', name: '投递工作台', path: '/delivery/postoffice' },
-      { id: 'delivery-postoffice-print', name: '打印投递单', path: '/delivery/print' },
-      { id: 'delivery-postoffice-packages', name: '接收总包', path: '/delivery/packages' },
+      { id: 'delivery-postoffice-packages', name: '接收总包', path: '/delivery/packages', permission: 'MAIL_QUERY' },
+      { id: 'delivery-postoffice-print', name: '打印投递单', path: '/delivery/print', permission: 'MAIL_QUERY' },
+      { id: 'delivery-postoffice', name: '投递工作台', path: '/delivery/postoffice', permission: 'MAIL_QUERY' },
     ],
   },
   catalog: {
@@ -79,7 +79,7 @@ const MENU_LIBRARY = {
   },
   dispatch: {
     id: 'dispatch',
-    name: '封发',
+    name: '总包封发',
     path: '/dispatch/bags',
     kind: 'group',
     children: [
@@ -91,21 +91,21 @@ const MENU_LIBRARY = {
   },
   sorting: {
     id: 'sorting',
-    name: '分拣机构',
+    name: '分拣作业',
     path: '/sorting/manifests',
     kind: 'group',
     children: [
       { id: 'sorting-manifests', name: '路单管理', path: '/sorting/manifests' },
       { id: 'sorting-receive', name: '接收勾核', path: '/sorting/receive' },
       { id: 'sorting-unpack', name: '开拆作业', path: '/sorting/unpack' },
-      { id: 'sorting-route', name: '自动路由安检', path: '/sorting/route' },
+      { id: 'sorting-route', name: '路由计算', path: '/sorting/route' },
       { id: 'sorting-export', name: '出口处理', path: '/sorting/export' },
       { id: 'sorting-rebag', name: '再次封发', path: '/sorting/rebag' },
     ],
   },
   tracking: {
     id: 'tracking',
-    name: '查询',
+    name: '轨迹查询',
     path: '/tracking/search',
     kind: 'group',
     children: [
@@ -120,9 +120,9 @@ const MENU_LIBRARY = {
     kind: 'group',
     children: [
       { id: 'facility-admin', name: '机构管理', path: '/facility/admin' },
-      { id: 'facility-offices', name: '网点', path: '/facility/offices' },
+      { id: 'facility-offices', name: '网点管理', path: '/facility/offices' },
       { id: 'facility-hubs', name: '分拣中心', path: '/facility/hubs' },
-      { id: 'facility-routes', name: '封发关系管理', path: '/facility/routes' },
+      { id: 'facility-routes', name: '封发关系', path: '/facility/routes' },
     ],
   },
   transport: {
@@ -143,19 +143,22 @@ const MENU_LIBRARY = {
     path: '/system/users',
     kind: 'group',
     children: [
-      { id: 'system-users', name: '用户管理', path: '/system/users' },
-      { id: 'system-roles', name: '角色管理', path: '/system/roles' },
-      { id: 'system-permissions', name: '权限管理', path: '/system/permissions' },
+      { id: 'system-users', name: '用户管理', path: '/system/users', permission: 'USER_ADMIN' },
+      { id: 'system-roles', name: '角色管理', path: '/system/roles', permission: 'ROLE_ADMIN' },
+      { id: 'system-permissions', name: '权限管理', path: '/system/permissions', permission: 'ROLE_ADMIN' },
+      { id: 'system-sentinel', name: 'Sentinel 监控', path: '/system/sentinel', permission: 'ROLE_ADMIN' },
     ],
   },
   sync: {
     id: 'sync',
-    name: '同步监控',
-    path: '/sync/outbox',
+    name: '同步补偿',
+    path: '/sync/overview',
     kind: 'group',
     children: [
-      { id: 'sync-outbox', name: 'Outbox', path: '/sync/outbox' },
-      { id: 'sync-tasks', name: '任务监控', path: '/sync/tasks' },
+      { id: 'sync-overview', name: '同步总览', path: '/sync/overview' },
+      { id: 'sync-outbox', name: 'Outbox 消息', path: '/sync/outbox' },
+      { id: 'sync-tasks', name: '同步任务', path: '/sync/tasks' },
+      { id: 'sync-retries', name: '重试记录', path: '/sync/retries' },
     ],
   },
 };
@@ -165,8 +168,19 @@ function allowByPermission(permissions = [], permission) {
   return permissions.includes(permission);
 }
 
+function allowSortingSection(facilityTypeCode, roleKey) {
+  const code = String(facilityTypeCode || '').toUpperCase();
+  if (code === 'POST_OFFICE') {
+    return false;
+  }
+  if (roleKey === 'SORTER') {
+    return true;
+  }
+  return code !== '';
+}
+
 export function buildMenuTree(profile = {}) {
-  const role = profile.role === 'POSTOFFICE' ? 'CLERK' : (profile.role || 'CLERK');
+  const role = profile.role || 'CLERK';
   const permissions = profile.permissions || [];
   const facilityTypeCode = profile.facilityTypeCode || '';
   const rule = ROLE_MENU_RULES[role] || ROLE_MENU_RULES.CLERK;
@@ -179,7 +193,12 @@ export function buildMenuTree(profile = {}) {
       nodes.push({ ...entry, children: [] });
       continue;
     }
+    if (key === 'sorting' && !allowSortingSection(facilityTypeCode, role)) {
+      continue;
+    }
+    const allowedChildren = rule.children[key] || [];
     const children = entry.children
+      .filter((child) => allowedChildren.includes(child.id))
       .filter((child) => allowByPermission(permissions, child.permission))
       .filter((child) => {
         if (key !== 'sorting') return true;

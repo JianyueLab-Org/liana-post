@@ -1,3 +1,5 @@
+import { notifyApiError } from './apiErrorEvents';
+
 const SERVICE_PREFIX = {
   auth: '/liana-auth-service',
   facility: '/liana-facility-service',
@@ -6,7 +8,16 @@ const SERVICE_PREFIX = {
   sorting: '/liana-sorting-service',
   tracking: '/liana-records-service',
   transport: '/liana-transport-service',
+  sync: '/liana-syncer',
 };
+
+export class ApiRequestError extends Error {
+  constructor(message, details = {}) {
+    super(message || '请求失败');
+    this.name = 'ApiRequestError';
+    Object.assign(this, details);
+  }
+}
 
 export function unwrapResult(payload) {
   if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -15,10 +26,71 @@ export function unwrapResult(payload) {
   return payload;
 }
 
+async function readPayload(response) {
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  if (!text) return '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return text;
+    }
+  }
+
+  return text;
+}
+
+function extractErrorMessage(payload, fallback) {
+  if (typeof payload === 'string' && payload.trim()) return payload.trim();
+  if (payload && typeof payload === 'object') {
+    return payload.message || payload.msg || payload.error || payload.detail || fallback;
+  }
+  return fallback;
+}
+
+function getBusinessError(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if ('success' in payload && payload.success === false) {
+    return {
+      code: payload.code ?? '',
+      message: extractErrorMessage(payload, '请求失败'),
+    };
+  }
+
+  if ('ok' in payload && payload.ok === false) {
+    return {
+      code: payload.code ?? '',
+      message: extractErrorMessage(payload, '请求失败'),
+    };
+  }
+
+  if ('code' in payload) {
+    const numericCode = Number(payload.code);
+    const isSuccessCode = Number.isFinite(numericCode) ? numericCode === 200 : payload.code === 'SUCCESS';
+    if (!isSuccessCode) {
+      return {
+        code: payload.code,
+        message: extractErrorMessage(payload, '请求失败'),
+      };
+    }
+  }
+
+  return null;
+}
+
+function createApiError(message, details) {
+  const error = new ApiRequestError(message, details);
+  notifyApiError(error);
+  return error;
+}
+
 export async function request(service, path, { method = 'GET', query, body, token } = {}) {
   const prefix = SERVICE_PREFIX[service];
   if (!prefix) {
-    throw new Error(`Unknown service: ${service}`);
+    throw createApiError(`Unknown service: ${service}`, { service, path, method });
   }
 
   const url = new URL(`${prefix}${path}`, window.location.origin);
@@ -34,16 +106,43 @@ export async function request(service, path, { method = 'GET', query, body, toke
   if (body !== undefined) headers['Content-Type'] = 'application/json; charset=utf-8';
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+  let response;
+  try {
+    response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch (error) {
+    throw createApiError(error?.message || '网络请求失败，请检查服务是否可用', {
+      service,
+      method,
+      path,
+      url: url.toString(),
+    });
+  }
 
+  const payload = await readPayload(response);
   if (!response.ok) {
-    throw new Error(typeof payload === 'string' ? payload : payload?.message || response.statusText);
+    throw createApiError(extractErrorMessage(payload, response.statusText || '请求失败'), {
+      service,
+      method,
+      path,
+      url: url.toString(),
+      status: response.status,
+      payload,
+    });
   }
-  if (payload && typeof payload === 'object' && 'code' in payload && payload.code !== 200) {
-    throw new Error(payload.message || 'Request failed');
+
+  const businessError = getBusinessError(payload);
+  if (businessError) {
+    throw createApiError(businessError.message, {
+      service,
+      method,
+      path,
+      url: url.toString(),
+      status: response.status,
+      code: businessError.code,
+      payload,
+    });
   }
+
   return unwrapResult(payload);
 }
 

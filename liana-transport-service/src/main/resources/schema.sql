@@ -22,8 +22,8 @@ CREATE TABLE `transport_asset` (
 CREATE TABLE `transport_route` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `route_code` VARCHAR(64) NOT NULL,
-  `origin_facility_id` BIGINT NOT NULL,
-  `destination_facility_id` BIGINT NOT NULL,
+  `origin_facility_id` VARCHAR(64) NOT NULL,
+  `destination_facility_id` VARCHAR(64) NOT NULL,
   `transport_type` VARCHAR(32) NOT NULL,
   `estimated_hours` DECIMAL(10,2) DEFAULT NULL,
   `status` VARCHAR(32) NOT NULL,
@@ -78,9 +78,9 @@ INSERT INTO `transport_asset` (`code`, `name`, `type`, `capacity`, `status`) VAL
 ('T-001', 'Post Truck 12', 'TRUCK', 80.00, 'MAINTENANCE');
 
 INSERT INTO `transport_route` (`route_code`, `origin_facility_id`, `destination_facility_id`, `transport_type`, `estimated_hours`, `status`) VALUES
-('TR-A1-B1-SEA', 1, 2, 'SEA', 18.00, 'ACTIVE'),
-('TR-A1-B1-AIR', 1, 2, 'AIR', 4.00, 'ACTIVE'),
-('TR-B1-C1-LAND', 2, 3, 'LAND', 3.50, 'PLANNED');
+('TR-A1-B1-SEA', 'A1', 'B1', 'SEA', 18.00, 'ACTIVE'),
+('TR-A1-B1-AIR', 'A1', 'B1', 'AIR', 4.00, 'ACTIVE'),
+('TR-B1-C1-LAND', 'B1', 'C1', 'LAND', 3.50, 'PLANNED');
 
 INSERT INTO `transport_schedule` (`schedule_code`, `asset_id`, `route_id`, `departure_time`, `arrival_time`, `weekday`, `status`) VALUES
 ('TS-20260611-001', 1, 1, '2026-06-11 08:00:00', '2026-06-12 02:00:00', 'MON', 'ACTIVE'),

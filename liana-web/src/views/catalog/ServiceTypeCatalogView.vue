@@ -4,7 +4,7 @@
       <div class="flex items-center justify-between gap-4">
         <div>
           <h3 class="card-title">服务类型</h3>
-          <p class="mt-1 text-sm text-gray-500">当前仅保留航空、SAL、海运三类示例。</p>
+          <p class="mt-1 text-sm text-gray-500">维护邮件服务类型，用于收寄录入、资费策略和国际邮件处理。</p>
         </div>
       </div>
     </div>

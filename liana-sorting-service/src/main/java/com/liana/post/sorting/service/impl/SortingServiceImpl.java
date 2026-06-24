@@ -137,6 +137,8 @@ public class SortingServiceImpl implements SortingService {
         SortingManifestEntity manifest = null;
         if (isPrealert(request) && StringUtils.hasText(request.getManifestNo())) {
             manifest = ensureManifest(request);
+        } else {
+            manifest = resolveManifestForPackages(packageNos);
         }
         SortingTotalPackageEntity first = null;
         for (String packageNo : packageNos) {
@@ -146,10 +148,14 @@ public class SortingServiceImpl implements SortingService {
                 pkg.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
                 pkg.setPackageStatus(SortingConstants.PACKAGE_STATUS_RAW);
                 pkg.setSourceOrgCode(request.getStationCode());
+                pkg.setDestinationOrgCode(request.getStationCode());
                 pkg.setPrealertFlag(isPrealert(request) ? 1 : 0);
                 return sortingRepository.saveTotalPackage(pkg);
             });
             assertPackageOpenable(totalPackage);
+            if (!StringUtils.hasText(totalPackage.getDestinationOrgCode())) {
+                totalPackage.setDestinationOrgCode(request.getStationCode());
+            }
             totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_RECEIVED);
             totalPackage.setReceivedAt(LocalDateTime.now());
             totalPackage.setManifestNo(manifest == null ? request.getManifestNo() : manifest.getManifestNo());
@@ -189,7 +195,6 @@ public class SortingServiceImpl implements SortingService {
 
         for (SortingUnpackItemRequest.SortingUnpackItemEntry entry : request.getItems()) {
             actual.add(entry.getItemNo());
-            validateMailExists(entry.getItemNo());
             PackageItemLineEntity line = new PackageItemLineEntity();
             line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), request.getPackageNo(), entry.getItemNo()));
             line.setItemNo(entry.getItemNo());
@@ -204,12 +209,18 @@ public class SortingServiceImpl implements SortingService {
             line.setDeviceId(request.getDeviceId());
             sortingRepository.savePackageItemLine(line);
             responses.add(toLineResponse(line));
-            updateMailBag(entry.getItemNo(), null);
+            try {
+                updateMailBag(entry.getItemNo(), null, request.getStationCode());
+            } catch (Exception ignored) {
+            }
 
             if (prealert && !expected.contains(entry.getItemNo())) {
                 saveDiscrepancy(request.getManifestNo(), request.getPackageNo(), entry.getItemNo(), SortingConstants.DISCREPANCY_SURPLUS, SortingConstants.SOURCE_MANIFEST, 0, 1);
             }
-            updateMailStatus(entry.getItemNo(), SortingConstants.EVENT_SORTED, request.getStationCode());
+            try {
+                updateMailStatus(entry.getItemNo(), SortingConstants.EVENT_SORTED, request.getStationCode());
+            } catch (Exception ignored) {
+            }
         }
 
         if (prealert) {
@@ -232,7 +243,6 @@ public class SortingServiceImpl implements SortingService {
     @Transactional
     public SortingSecurityAuditResponse routeCalculate(SortingRouteScanRequest request) {
         String itemNo = normalizeBlank(request.getItemNo());
-        validateMailExists(itemNo);
         OmsClient omsClient = omsClientProvider.getIfAvailable();
         com.liana.post.common.model.Result<com.liana.post.oms.model.dto.MailResponse> mailResult = omsClient == null ? null : omsClient.getMail(itemNo);
         com.liana.post.oms.model.dto.MailResponse mail = mailResult == null ? null : mailResult.getData();
@@ -400,7 +410,7 @@ public class SortingServiceImpl implements SortingService {
             line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), countryCode, waybillNo));
             line.setItemNo(waybillNo);
             line.setActionType(SortingConstants.LINE_ACTION_LOAD);
-            line.setEventType(SortingConstants.EVENT_ROUTE);
+            line.setEventType(SortingConstants.EVENT_REBAG);
             line.setScanMode(SortingConstants.SCAN_MODE_BLIND);
             line.setFromPackageNo(null);
             line.setToPackageNo(bagNo);
@@ -409,7 +419,14 @@ public class SortingServiceImpl implements SortingService {
             line.setOperatorId(request.getOperatorId());
             line.setExt("{\"countryCode\":\"" + countryCode + "\",\"exportFacilityCode\":\"" + escapeJson(exportFacilityCode) + "\"}");
             sortingRepository.savePackageItemLine(line);
-            updateMailRouteToCountry(waybillNo, countryCode, exportFacilityCode, stationCode);
+            updateMailBag(waybillNo, bagNo, stationCode);
+            recordTracking(waybillNo, com.liana.post.common.constant.LogisticsConstants.TRACKING_EVENT_DISPATCHED,
+                    stationCode, request.getOperatorId(),
+                    "{\"countryCode\":\"" + countryCode
+                            + "\",\"destinationNode\":\"" + countryCode
+                            + "\",\"exportFacilityCode\":\"" + escapeJson(exportFacilityCode)
+                            + "\",\"packageId\":\"" + bagNo
+                            + "\",\"bagNo\":\"" + bagNo + "\"}");
         }
 
         SortingTotalPackageEntity totalPackage = new SortingTotalPackageEntity();
@@ -429,10 +446,47 @@ public class SortingServiceImpl implements SortingService {
     }
 
     @Override
+    public SortingUnpackPreviewResponse previewUnpackItems(String packageNo, String manifestNo) {
+        String normalizedPackageNo = normalizeBlank(packageNo);
+        SortingUnpackPreviewResponse response = new SortingUnpackPreviewResponse();
+        response.setPackageNo(normalizedPackageNo);
+
+        String resolvedManifestNo = StringUtils.hasText(manifestNo) ? normalizeBlank(manifestNo) : null;
+        if (resolvedManifestNo != null) {
+            List<String> itemNos = loadPendingItemsFromManifest(resolvedManifestNo, normalizedPackageNo);
+            if (!itemNos.isEmpty()) {
+                response.setManifestNo(resolvedManifestNo);
+                response.setSource("MANIFEST");
+                response.setItemNos(itemNos);
+                return response;
+            }
+        }
+
+        SortingManifestEntity inferredManifest = sortingRepository.findManifestByExpectedPackageNo(normalizedPackageNo).orElse(null);
+        if (inferredManifest != null) {
+            resolvedManifestNo = inferredManifest.getManifestNo();
+            List<String> itemNos = loadPendingItemsFromManifest(resolvedManifestNo, normalizedPackageNo);
+            if (!itemNos.isEmpty()) {
+                response.setManifestNo(resolvedManifestNo);
+                response.setSource("MANIFEST");
+                response.setItemNos(itemNos);
+                return response;
+            }
+        }
+
+        List<String> itemNos = loadPendingItemsFromPackage(normalizedPackageNo);
+        response.setManifestNo(resolvedManifestNo);
+        response.setSource(itemNos.isEmpty() ? "EMPTY" : "OMS");
+        response.setItemNos(itemNos);
+        return response;
+    }
+
+    @Override
     @Transactional
     public SortingPackageResponse reBag(SortingRebagRequest request) {
         SortingTotalPackageEntity source = sortingRepository.findTotalPackageByNo(request.getSourcePackageNo())
                 .orElseThrow(() -> new BusinessException(404, "source package not found"));
+        List<String> itemNos = dedupe(request.getItemNos());
         SortingTotalPackageEntity totalPackage = new SortingTotalPackageEntity();
         totalPackage.setPackageNo(IdGeneratorUtil.generateBagNo());
         totalPackage.setPackageLevel(normalizePackageLevel(request.getPackageLevel()));
@@ -442,7 +496,7 @@ public class SortingServiceImpl implements SortingService {
         totalPackage.setPrealertFlag(0);
         totalPackage = sortingRepository.saveTotalPackage(totalPackage);
 
-        for (String itemNo : dedupe(request.getItemNos())) {
+        for (String itemNo : itemNos) {
             PackageItemLineEntity line = new PackageItemLineEntity();
             line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), totalPackage.getPackageNo(), itemNo));
             line.setItemNo(itemNo);
@@ -454,12 +508,13 @@ public class SortingServiceImpl implements SortingService {
             line.setStationCode(request.getStationCode());
             line.setOperatorId(request.getOperatorId());
             sortingRepository.savePackageItemLine(line);
-            updateMailBag(itemNo, totalPackage.getPackageNo());
+            updateMailBag(itemNo, totalPackage.getPackageNo(), request.getStationCode());
         }
 
         totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_SEALED);
         totalPackage.setSealedAt(LocalDateTime.now());
         sortingRepository.updateTotalPackage(totalPackage);
+        syncOutgoingManifest(totalPackage, request.getRouteCode(), request.getStationCode(), itemNos);
         recordTracking(totalPackage.getPackageNo(), SortingConstants.EVENT_REBAG, request.getStationCode(), request.getOperatorId(), "{\"sourcePackageNo\":\"" + source.getPackageNo() + "\"}");
         return toPackageResponse(totalPackage);
     }
@@ -473,10 +528,14 @@ public class SortingServiceImpl implements SortingService {
             }
         }
         OmsClient client = omsClientProvider.getIfAvailable();
+        String normalizedStation = StringUtils.hasText(stationCode) ? stationCode.trim().toUpperCase() : null;
         if (client != null) {
             com.liana.post.common.model.Result<List<MailSlotSummaryResponse>> result = client.listActiveSlots();
             if (result != null && result.getData() != null) {
                 for (MailSlotSummaryResponse item : result.getData()) {
+                    if (normalizedStation != null && !normalizedStation.equalsIgnoreCase(item.getCurrentFacilityCode())) {
+                        continue;
+                    }
                     SortingSlotSummaryResponse summary = toSortingSlotSummary(item);
                     if (summary.getPendingCount() != null && summary.getPendingCount() > 0 && StringUtils.hasText(summary.getSlotCode())) {
                         summaries.putIfAbsent(summary.getSlotCode().trim().toUpperCase(), summary);
@@ -520,7 +579,7 @@ public class SortingServiceImpl implements SortingService {
             line.setStationCode(stationCode);
             line.setOperatorId(operatorId);
             sortingRepository.savePackageItemLine(line);
-            updateMailBag(loadLine.getItemNo(), totalPackage.getPackageNo());
+            updateMailBag(loadLine.getItemNo(), totalPackage.getPackageNo(), stationCode);
         }
 
         persistSlotSeal(normalizedSlot, totalPackage.getPackageNo(), stationCode);
@@ -560,9 +619,17 @@ public class SortingServiceImpl implements SortingService {
                 .orElseThrow(() -> new BusinessException(404, "manifest not found: " + manifestNo));
         SortingManifestDetailResponse response = new SortingManifestDetailResponse();
         copyManifest(response, manifest);
-        response.setItems(sortingRepository.findManifestItems(manifest.getManifestNo()).stream()
+        List<SortingManifestItemEntity> items = sortingRepository.findManifestItems(manifest.getManifestNo());
+        response.setItems(items.stream()
                 .map(this::toManifestItemResponse)
                 .toList());
+        List<SortingPackageResponse> packages = sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo()).stream()
+                .map(this::toPackageResponse)
+                .toList();
+        if (packages.isEmpty()) {
+            packages = expectedPackagesFromItems(manifest, items);
+        }
+        response.setPackages(packages);
         return response;
     }
 
@@ -653,15 +720,109 @@ public class SortingServiceImpl implements SortingService {
         return sortingRepository.saveManifest(entity);
     }
 
-    private void validateMailExists(String itemNo) {
-        OmsClient client = omsClientProvider.getIfAvailable();
-        if (client == null) {
+    private SortingManifestEntity resolveManifestForPackages(List<String> packageNos) {
+        if (packageNos == null || packageNos.isEmpty()) {
+            return null;
+        }
+        String manifestNo = null;
+        for (String packageNo : packageNos) {
+            SortingManifestEntity inferred = sortingRepository.findManifestByExpectedPackageNo(packageNo).orElse(null);
+            if (inferred == null) {
+                return null;
+            }
+            if (manifestNo == null) {
+                manifestNo = inferred.getManifestNo();
+                continue;
+            }
+            if (!manifestNo.equalsIgnoreCase(inferred.getManifestNo())) {
+                return null;
+            }
+        }
+        return StringUtils.hasText(manifestNo) ? sortingRepository.findManifestByNo(manifestNo).orElse(null) : null;
+    }
+
+    private void syncOutgoingManifest(SortingTotalPackageEntity totalPackage, String destinationOrgCode, String stationCode, List<String> itemNos) {
+        if (totalPackage == null || !StringUtils.hasText(totalPackage.getPackageNo()) || !StringUtils.hasText(destinationOrgCode)) {
             return;
         }
-        Result<MailResponse> result = client.getMail(itemNo);
-        if (result == null || result.getData() == null) {
-            throw new BusinessException(404, "mail not found: " + itemNo);
+        String manifestNo = totalPackage.getPackageNo().trim().toUpperCase();
+        String normalizedDestination = normalizeBlank(destinationOrgCode);
+        SortingManifestEntity manifest = sortingRepository.findManifestByNo(manifestNo).orElseGet(SortingManifestEntity::new);
+        manifest.setManifestNo(manifestNo);
+        manifest.setBatchNo(manifestNo);
+        manifest.setSourceOrgCode(normalizeBlank(stationCode));
+        manifest.setDestinationOrgCode(normalizedDestination);
+        manifest.setManifestType(SortingConstants.PACKAGE_LEVEL_TRANSIT);
+        if (!isManifestChecked(manifest)) {
+            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_RECEIVED);
         }
+        manifest.setPrealertFlag(1);
+        manifest.setExpectedPackageQty(1);
+        manifest.setExpectedItemQty(itemNos == null ? 0 : itemNos.size());
+        sortingRepository.saveManifest(manifest);
+
+        Set<String> existing = sortingRepository.findManifestItems(manifestNo).stream()
+                .map(SortingManifestItemEntity::getItemNo)
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .collect(Collectors.toSet());
+        int seq = 0;
+        for (String itemNo : itemNos == null ? List.<String>of() : itemNos) {
+            if (!StringUtils.hasText(itemNo)) {
+                continue;
+            }
+            String normalizedItemNo = itemNo.trim().toUpperCase();
+            if (existing.contains(normalizedItemNo)) {
+                continue;
+            }
+            SortingManifestItemEntity line = new SortingManifestItemEntity();
+            line.setManifestNo(manifestNo);
+            line.setItemNo(normalizedItemNo);
+            line.setExpectedPackageNo(manifestNo);
+            line.setExpectedSeqNo(++seq);
+            line.setExpectedRouteCode(normalizedDestination);
+            line.setExpectedQty(1);
+            line.setItemStatus("EXPECTED");
+            sortingRepository.saveManifestItem(line);
+            existing.add(normalizedItemNo);
+        }
+    }
+
+    private List<String> loadPendingItemsFromManifest(String manifestNo, String packageNo) {
+        try {
+            SortingManifestDetailResponse detail = getManifestDetail(manifestNo);
+            if (detail == null) {
+                return List.of();
+            }
+            String normalizedPackageNo = normalizeBlank(packageNo);
+            List<String> fromItems = detail.getItems().stream()
+                    .filter(item -> normalizedPackageNo.equalsIgnoreCase(normalizeBlank(item.getExpectedPackageNo())))
+                    .map(SortingManifestItemResponse::getItemNo)
+                    .filter(StringUtils::hasText)
+                    .map(value -> value.trim().toUpperCase())
+                    .distinct()
+                    .toList();
+            return fromItems;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private List<String> loadPendingItemsFromPackage(String packageNo) {
+        Map<String, MailResponse> mails = loadMailMap();
+        if (mails.isEmpty()) {
+            return List.of();
+        }
+        String normalizedPackageNo = normalizeBlank(packageNo);
+        return mails.values().stream()
+                .filter(mail -> mail != null)
+                .filter(mail -> normalizedPackageNo.equalsIgnoreCase(normalizeTrimmed(mail.getBagNo()))
+                        || normalizedPackageNo.equalsIgnoreCase(normalizeTrimmed(mail.getPackageId())))
+                .map(MailResponse::getWaybillNo)
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .distinct()
+                .toList();
     }
 
     private List<String> resolveDangerLabels(com.liana.post.oms.model.dto.MailResponse mail, List<SortingDetectedLabelResponse> labels) {
@@ -758,13 +919,14 @@ public class SortingServiceImpl implements SortingService {
         trackingClient.recordEvent(request);
     }
 
-    private void updateMailBag(String itemNo, String packageNo) {
+    private void updateMailBag(String itemNo, String packageNo, String stationCode) {
         OmsClient client = omsClientProvider.getIfAvailable();
         if (client == null) {
             return;
         }
         com.liana.post.oms.model.dto.MailBagAssignRequest request = new com.liana.post.oms.model.dto.MailBagAssignRequest();
         request.setBagNo(StringUtils.hasText(packageNo) ? packageNo : null);
+        request.setCurrentFacilityCode(StringUtils.hasText(stationCode) ? stationCode : null);
         client.updateMailBag(itemNo, request);
     }
 
@@ -1020,6 +1182,10 @@ public class SortingServiceImpl implements SortingService {
         return value.trim().toUpperCase();
     }
 
+    private String normalizeTrimmed(String value) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase() : "";
+    }
+
     private String resolveFacilityCode(String authorization) {
         if (!StringUtils.hasText(authorization)) {
             return null;
@@ -1061,6 +1227,29 @@ public class SortingServiceImpl implements SortingService {
         return response;
     }
 
+    private List<SortingPackageResponse> expectedPackagesFromItems(SortingManifestEntity manifest, List<SortingManifestItemEntity> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(SortingManifestItemEntity::getExpectedPackageNo)
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .distinct()
+                .map(packageNo -> {
+                    SortingPackageResponse response = new SortingPackageResponse();
+                    response.setPackageNo(packageNo);
+                    response.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
+                    response.setPackageStatus(SortingConstants.PACKAGE_STATUS_RAW);
+                    response.setSourceOrgCode(manifest.getSourceOrgCode());
+                    response.setDestinationOrgCode(manifest.getDestinationOrgCode());
+                    response.setManifestNo(manifest.getManifestNo());
+                    response.setPrealertFlag(1);
+                    return response;
+                })
+                .toList();
+    }
+
     private List<com.liana.post.oms.model.dto.MailResponse> loadInternationalMails(String stationCode) {
         OmsClient client = omsClientProvider.getIfAvailable();
         if (client == null) {
@@ -1070,6 +1259,10 @@ public class SortingServiceImpl implements SortingService {
         if (result == null || result.getData() == null) {
             return List.of();
         }
+        String normalizedStation = StringUtils.hasText(stationCode) ? stationCode.trim().toUpperCase() : null;
+        Map<String, List<PackageItemLineEntity>> linesByItem = sortingRepository.findAllPackageLines().stream()
+                .filter(line -> line != null && StringUtils.hasText(line.getItemNo()))
+                .collect(Collectors.groupingBy(line -> line.getItemNo().trim().toUpperCase(), LinkedHashMap::new, Collectors.toList()));
         return result.getData().stream()
                 .filter(mail -> mail != null)
                 .filter(mail -> StringUtils.hasText(mail.getCurrentFacilityCode()))
@@ -1078,8 +1271,27 @@ public class SortingServiceImpl implements SortingService {
                 .filter(mail -> com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_SORTED.equals(mail.getStatus())
                         || com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_ARRIVED.equals(mail.getStatus())
                         || com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_CREATED.equals(mail.getStatus()))
-                .filter(mail -> !StringUtils.hasText(mail.getPackageId()))
+                .filter(mail -> isCountrySlotCandidate(mail, normalizedStation, linesByItem))
                 .toList();
+    }
+
+    private boolean isCountrySlotCandidate(com.liana.post.oms.model.dto.MailResponse mail, String stationCode, Map<String, List<PackageItemLineEntity>> linesByItem) {
+        if (mail == null) {
+            return false;
+        }
+        if (!StringUtils.hasText(mail.getPackageId())) {
+            return true;
+        }
+        if (!StringUtils.hasText(mail.getWaybillNo()) || linesByItem == null || linesByItem.isEmpty()) {
+            return false;
+        }
+        List<PackageItemLineEntity> lines = linesByItem.get(mail.getWaybillNo().trim().toUpperCase());
+        PackageItemLineEntity latestUnpack = latestUnpackLine(lines, stationCode);
+        if (latestUnpack == null) {
+            return false;
+        }
+        return lines.stream()
+                .noneMatch(line -> isLoadLine(line) && isAfter(line.getEventTime(), latestUnpack.getEventTime()));
     }
 
     private Map<String, String> loadCountryNames(Set<String> countryCodes) {
@@ -1120,19 +1332,6 @@ public class SortingServiceImpl implements SortingService {
         response.setExportFacilityCode(resolveExportFacilityCode(countryCode));
         response.setRouteCode(countryCode + "-EXPORT");
         return response;
-    }
-
-    private void updateMailRouteToCountry(String waybillNo, String countryCode, String exportFacilityCode, String stationCode) {
-        OmsClient client = omsClientProvider.getIfAvailable();
-        if (client == null) {
-            return;
-        }
-        com.liana.post.oms.model.dto.MailRouteAssignRequest request = new com.liana.post.oms.model.dto.MailRouteAssignRequest();
-        request.setCurrentSlot(countryCode);
-        request.setDestinationNode(exportFacilityCode);
-        request.setCurrentFacilityCode(stationCode);
-        request.setStatus(com.liana.post.common.constant.LogisticsConstants.MAIL_STATUS_SORTED);
-        client.updateMailRoute(waybillNo, request);
     }
 
     private String resolveExportFacilityCode(String countryCode) {

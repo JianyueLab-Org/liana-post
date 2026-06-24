@@ -5,6 +5,7 @@ import com.liana.post.common.dto.dispatch.DispatchBagBriefResponse;
 import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
 import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
 import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.model.Result;
 import com.liana.post.common.util.IdGeneratorUtil;
 import com.liana.post.transport.constant.TransportConstants;
 import com.liana.post.transport.client.DispatchClient;
@@ -21,6 +22,8 @@ import com.liana.post.transport.model.entity.TransportScheduleEntity;
 import com.liana.post.transport.model.entity.TransportTaskEntity;
 import com.liana.post.transport.repository.TransportRepository;
 import com.liana.post.transport.service.TransportService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -31,6 +34,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class TransportServiceImpl implements TransportService {
+    private static final Logger log = LoggerFactory.getLogger(TransportServiceImpl.class);
+
     private final TransportRepository transportRepository;
     private final ObjectProvider<DispatchClient> dispatchClientProvider;
     private final ObjectProvider<TrackingClient> trackingClientProvider;
@@ -291,7 +296,18 @@ public class TransportServiceImpl implements TransportService {
         if (client == null) {
             throw new BusinessException(503, "dispatch client unavailable");
         }
-        return client.getBagById(dispatchBagId).getData();
+        Result<DispatchBagBriefResponse> response = client.getBagById(dispatchBagId);
+        if (response == null || response.getCode() == null || response.getCode() != 200) {
+            String message = response == null || !StringUtils.hasText(response.getMessage())
+                    ? "dispatch bag lookup failed: " + dispatchBagId
+                    : response.getMessage();
+            throw new BusinessException(502, message);
+        }
+        DispatchBagBriefResponse bag = response.getData();
+        if (bag == null) {
+            throw new BusinessException(404, "dispatch bag not found: " + dispatchBagId);
+        }
+        return bag;
     }
 
     private Long findRouteIdByCode(String routeCode) {
@@ -321,7 +337,11 @@ public class TransportServiceImpl implements TransportService {
         }
         DispatchTransportTaskLinkRequest request = new DispatchTransportTaskLinkRequest();
         request.setTransportTaskCode(taskCode);
-        client.linkTransportTask(dispatchBagId, request);
+        try {
+            client.linkTransportTask(dispatchBagId, request);
+        } catch (Exception ex) {
+            log.warn("failed to link dispatch bag {} to transport task {}", dispatchBagId, taskCode, ex);
+        }
     }
 
     private void recordTrackingEvent(Long dispatchBagId, String taskCode, String status, String note) {
@@ -329,15 +349,19 @@ public class TransportServiceImpl implements TransportService {
         if (client == null || dispatchBagId == null) {
             return;
         }
-        DispatchBagBriefResponse bag = loadDispatchBag(dispatchBagId);
-        TrackingEventCreateRequest request = new TrackingEventCreateRequest();
-        request.setWaybillNo(bag.getBagNo());
-        request.setEventType(mapStatusToEventType(status));
-        request.setSourceService("TRANSPORT");
-        request.setFacilityCode(bag.getOriginFacilityCode());
-        request.setFacilityName(null);
-        request.setPayload("{\"taskCode\":\"" + taskCode + "\",\"dispatchBagId\":" + dispatchBagId + ",\"note\":\"" + note + "\"}");
-        client.recordEvent(request);
+        try {
+            DispatchBagBriefResponse bag = loadDispatchBag(dispatchBagId);
+            TrackingEventCreateRequest request = new TrackingEventCreateRequest();
+            request.setWaybillNo(bag.getBagNo());
+            request.setEventType(mapStatusToEventType(status));
+            request.setSourceService("TRANSPORT");
+            request.setFacilityCode(bag.getOriginFacilityCode());
+            request.setFacilityName(null);
+            request.setPayload("{\"taskCode\":\"" + taskCode + "\",\"dispatchBagId\":" + dispatchBagId + ",\"note\":\"" + note + "\"}");
+            client.recordEvent(request);
+        } catch (Exception ex) {
+            log.warn("failed to record tracking event for transport task {}", taskCode, ex);
+        }
     }
 
     private String mapStatusToEventType(String status) {
@@ -434,11 +458,7 @@ public class TransportServiceImpl implements TransportService {
         if (!StringUtils.hasText(value)) {
             throw new BusinessException(400, "facility reference is required");
         }
-        try {
-            return value.trim();
-        } catch (NumberFormatException ex) {
-            throw new BusinessException(400, "facility reference must be numeric");
-        }
+        return value.trim();
     }
 
     private String normalize(String value) {

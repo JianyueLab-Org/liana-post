@@ -116,6 +116,23 @@ public class MyBatisSortingRepository implements SortingRepository {
     }
 
     @Override
+    public Optional<SortingManifestEntity> findManifestByExpectedPackageNo(String packageNo) {
+        List<String> manifestNos = manifestItemMapper.selectList(new LambdaQueryWrapper<SortingManifestItemEntity>()
+                        .eq(SortingManifestItemEntity::getExpectedPackageNo, normalize(packageNo)))
+                .stream()
+                .map(SortingManifestItemEntity::getManifestNo)
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .distinct()
+                .toList();
+        if (manifestNos.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(manifestMapper.selectOne(new LambdaQueryWrapper<SortingManifestEntity>()
+                .eq(SortingManifestEntity::getManifestNo, manifestNos.get(0))));
+    }
+
+    @Override
     @Transactional
     public SortingManifestItemEntity saveManifestItem(SortingManifestItemEntity entity) {
         stamp(entity);

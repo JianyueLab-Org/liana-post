@@ -12,9 +12,12 @@ spring:
     import:
       - optional:nacos:application.yml
   datasource:
-    url: ${SYNCER_DB_URL:jdbc:mysql://127.0.0.1:3306/syncer_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    url: ${SYNCER_DB_URL:jdbc:mysql://127.0.0.1:3306/syncer_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
     username: ${SYNCER_DB_USERNAME:root}
-    password: ${SYNCER_DB_PASSWORD:root}
+    password: ${SYNCER_DB_PASSWORD:${DB_PASSWORD:wuyujie}}
     driver-class-name: com.mysql.cj.jdbc.Driver
 server:
-  port: 8085
+  port: 8089
+syncer:
+  demo:
+    dispatch-on-create: true

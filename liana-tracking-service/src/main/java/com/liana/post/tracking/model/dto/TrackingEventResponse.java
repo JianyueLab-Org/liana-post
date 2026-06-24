@@ -11,6 +11,9 @@ public class TrackingEventResponse {
     private String operatorName;
     private String payload;
     private String sourceService;
+    private String stageName;
+    private String locationText;
+    private String displayText;
 
     public String getEventNo() { return eventNo; }
     public void setEventNo(String eventNo) { this.eventNo = eventNo; }
@@ -32,4 +35,10 @@ public class TrackingEventResponse {
     public void setPayload(String payload) { this.payload = payload; }
     public String getSourceService() { return sourceService; }
     public void setSourceService(String sourceService) { this.sourceService = sourceService; }
+    public String getStageName() { return stageName; }
+    public void setStageName(String stageName) { this.stageName = stageName; }
+    public String getLocationText() { return locationText; }
+    public void setLocationText(String locationText) { this.locationText = locationText; }
+    public String getDisplayText() { return displayText; }
+    public void setDisplayText(String displayText) { this.displayText = displayText; }
 }

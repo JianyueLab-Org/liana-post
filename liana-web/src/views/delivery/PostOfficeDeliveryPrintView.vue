@@ -29,7 +29,7 @@
         <div v-for="item in rows" :key="item.waybillNo" class="mail-card">
           <div class="mail-head">
             <strong>{{ item.waybillNo }}</strong>
-            <span>{{ item.status }}</span>
+            <span>{{ formatStatus(item.status) }}</span>
           </div>
           <div class="mail-meta">
             <div>收件人：{{ item.recipientFullName || '-' }}</div>
@@ -63,13 +63,27 @@ const currentFacilityCode = computed(() => session.user?.facilityCode || '');
 async function load() {
   loading.value = true;
   try {
-    rows.value = await mailApi.listPendingDeliveryMails(currentFacilityCode.value, session.token);
+    const list = await mailApi.listPendingDeliveryMails(currentFacilityCode.value, session.token);
+    rows.value = list.filter(isPendingDeliveryMail);
     result.value = `loaded ${rows.value.length} pending mail(s)`;
   } catch (error) {
     result.value = error.message;
   } finally {
     loading.value = false;
   }
+}
+
+function isPendingDeliveryMail(item) {
+  if (!item || !['READY_FOR_DELIVERY', 'ARRIVED'].includes(item.status)) {
+    return false;
+  }
+  const facilityCode = (currentFacilityCode.value || '').trim().toUpperCase();
+  const rowFacilityCode = (item.currentFacilityCode || '').trim().toUpperCase();
+  return !facilityCode || rowFacilityCode === facilityCode;
+}
+
+function formatStatus(status) {
+  return ['READY_FOR_DELIVERY', 'ARRIVED'].includes(status) ? '待投递' : status;
 }
 
 function printPage() {

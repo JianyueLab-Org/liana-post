@@ -22,8 +22,8 @@ CREATE TABLE `transport_asset` (
 CREATE TABLE `transport_route` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `route_code` VARCHAR(64) NOT NULL,
-  `origin_facility_id` BIGINT NOT NULL,
-  `destination_facility_id` BIGINT NOT NULL,
+  `origin_facility_id` VARCHAR(64) NOT NULL,
+  `destination_facility_id` VARCHAR(64) NOT NULL,
   `transport_type` VARCHAR(32) NOT NULL,
   `estimated_hours` DECIMAL(10,2) DEFAULT NULL,
   `status` VARCHAR(32) NOT NULL,

@@ -45,7 +45,9 @@
         <h4 class="text-base font-semibold text-gray-900">操作面板</h4>
         <div class="mt-4 space-y-4">
           <input v-model="form.packageId" class="input" placeholder="总包号" />
-          <input v-model="form.currentFacilityCode" class="input" placeholder="当前机构编码" />
+          <div class="rounded-lg bg-slate-50 px-4 py-3 text-sm text-gray-600">
+            接收并开拆机构：<span class="font-semibold text-gray-900">{{ currentFacilityCode || '-' }}</span>
+          </div>
           <pre class="whitespace-pre-wrap text-sm text-gray-700">{{ result }}</pre>
         </div>
       </section>
@@ -54,7 +56,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { mailApi } from '../../lib/api';
 import { useSessionStore } from '../../stores/session';
 
@@ -63,9 +65,9 @@ const packages = ref([]);
 const selectedPackageId = ref('');
 const loading = ref(false);
 const result = ref('');
+const currentFacilityCode = computed(() => session.user?.facilityCode || '');
 const form = reactive({
   packageId: '',
-  currentFacilityCode: session.user?.facilityCode || '',
 });
 
 function selectPackage(packageId) {
@@ -87,7 +89,7 @@ async function receiveAndOpen() {
   try {
     const payload = await mailApi.receiveAndOpenPackage({
       packageId: form.packageId.trim().toUpperCase(),
-      currentFacilityCode: form.currentFacilityCode.trim(),
+      currentFacilityCode: currentFacilityCode.value,
     }, session.token);
     result.value = JSON.stringify(payload, null, 2);
     await load();

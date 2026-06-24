@@ -19,6 +19,7 @@ public interface SortingRepository {
     List<SortingManifestEntity> findAllManifests();
     List<SortingManifestItemEntity> findManifestItems(String manifestNo);
     SortingManifestItemEntity saveManifestItem(SortingManifestItemEntity entity);
+    Optional<SortingManifestEntity> findManifestByExpectedPackageNo(String packageNo);
     PackageItemLineEntity savePackageItemLine(PackageItemLineEntity entity);
     List<PackageItemLineEntity> findPackageLinesByItem(String itemNo);
     List<PackageItemLineEntity> findPackageLinesByPackage(String packageNo);

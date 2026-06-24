@@ -11,6 +11,12 @@ const KNOWN_FACILITY_TYPE_CODES = new Set([
   'AIR_HUB',
   'SEA_HUB',
 ]);
+const SORTING_FACILITY_TYPE_CODES = new Set([
+  'TRANSFER_CENTER',
+  'INTERNATIONAL_GATEWAY',
+  'AIR_HUB',
+  'SEA_HUB',
+]);
 
 function normalizeFacilityTypeCode(value) {
   if (!value) return '';
@@ -34,6 +40,9 @@ export const useSessionStore = defineStore('session', {
     facilityTypeCode: (state) => normalizeFacilityTypeCode(state.user?.facilityTypeCode || state.currentFacility?.typeCode),
     facilityTypeLabel: (state) => normalizeFacilityTypeCode(state.user?.facilityTypeCode || state.currentFacility?.typeCode) || '普通分拣局',
     isInternationalGateway: (state) => normalizeFacilityTypeCode(state.user?.facilityTypeCode || state.currentFacility?.typeCode) === 'INTERNATIONAL_GATEWAY',
+    isSortingFacility: (state) => SORTING_FACILITY_TYPE_CODES.has(
+      normalizeFacilityTypeCode(state.user?.facilityTypeCode || state.currentFacility?.typeCode),
+    ),
   },
   actions: {
     setSession(token, user) {
