@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 public class MailCreateRequest {
+    private java.util.List<String> additionalServices;
+    public java.util.List<String> getAdditionalServices() { return additionalServices; }
+    public void setAdditionalServices(java.util.List<String> value) { additionalServices = value; }
     private String originFacilityCode;
     private String currentFacilityCode;
     @NotBlank
@@ -27,8 +30,11 @@ public class MailCreateRequest {
     private String recipientPostcode;
     private String destCountryCode;
     @NotNull
+    @jakarta.validation.constraints.Min(1)
+    @jakarta.validation.constraints.Max(1000000)
     private Integer weightGrams;
     private BigDecimal declaredValue;
+    @NotBlank
     private String serviceType;
     private String mailScope;
 

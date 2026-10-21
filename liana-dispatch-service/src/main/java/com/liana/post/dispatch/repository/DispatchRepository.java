@@ -13,6 +13,8 @@ public interface DispatchRepository {
     DispatchBagEntity saveDispatchBag(DispatchBagEntity entity);
     DispatchBagEntity updateDispatchBag(DispatchBagEntity entity);
     DispatchBatchEntity saveDispatchBatch(DispatchBatchEntity entity);
+    void replaceBatchBags(String batchNo, List<String> bagNos);
+    List<String> findBatchBagNos(String batchNo);
     DispatchBatchEntity updateDispatchBatch(DispatchBatchEntity entity);
     HandoffRecordEntity saveHandoffRecord(HandoffRecordEntity entity);
     Optional<RouteRuleEntity> findRouteRuleByCode(String ruleCode);

@@ -7,12 +7,14 @@ import com.liana.post.sorting.constant.SortingConstants;
 import com.liana.post.sorting.mapper.DiscrepancyVerificationMapper;
 import com.liana.post.sorting.mapper.PackageItemLineMapper;
 import com.liana.post.sorting.mapper.SortingManifestItemMapper;
+import com.liana.post.sorting.mapper.SortingManifestPackageMapper;
 import com.liana.post.sorting.mapper.SortingManifestMapper;
 import com.liana.post.sorting.mapper.SortingTotalPackageMapper;
 import com.liana.post.sorting.model.entity.DiscrepancyVerificationEntity;
 import com.liana.post.sorting.model.entity.PackageItemLineEntity;
 import com.liana.post.sorting.model.entity.SortingManifestEntity;
 import com.liana.post.sorting.model.entity.SortingManifestItemEntity;
+import com.liana.post.sorting.model.entity.SortingManifestPackageEntity;
 import com.liana.post.sorting.model.entity.SortingTotalPackageEntity;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
@@ -28,17 +30,20 @@ public class MyBatisSortingRepository implements SortingRepository {
     private final SortingTotalPackageMapper totalPackageMapper;
     private final SortingManifestMapper manifestMapper;
     private final SortingManifestItemMapper manifestItemMapper;
+    private final SortingManifestPackageMapper manifestPackageMapper;
     private final PackageItemLineMapper packageItemLineMapper;
     private final DiscrepancyVerificationMapper discrepancyVerificationMapper;
 
     public MyBatisSortingRepository(SortingTotalPackageMapper totalPackageMapper,
                                     SortingManifestMapper manifestMapper,
                                     SortingManifestItemMapper manifestItemMapper,
+                                    SortingManifestPackageMapper manifestPackageMapper,
                                     PackageItemLineMapper packageItemLineMapper,
                                     DiscrepancyVerificationMapper discrepancyVerificationMapper) {
         this.totalPackageMapper = totalPackageMapper;
         this.manifestMapper = manifestMapper;
         this.manifestItemMapper = manifestItemMapper;
+        this.manifestPackageMapper = manifestPackageMapper;
         this.packageItemLineMapper = packageItemLineMapper;
         this.discrepancyVerificationMapper = discrepancyVerificationMapper;
     }
@@ -126,7 +131,13 @@ public class MyBatisSortingRepository implements SortingRepository {
                 .distinct()
                 .toList();
         if (manifestNos.isEmpty()) {
-            return Optional.empty();
+            SortingManifestPackageEntity manifestPackage = manifestPackageMapper.selectOne(
+                    new LambdaQueryWrapper<SortingManifestPackageEntity>()
+                            .eq(SortingManifestPackageEntity::getPackageNo, normalize(packageNo))
+                            .last("LIMIT 1"));
+            return manifestPackage == null
+                    ? Optional.empty()
+                    : findManifestByNo(manifestPackage.getManifestNo());
         }
         return Optional.ofNullable(manifestMapper.selectOne(new LambdaQueryWrapper<SortingManifestEntity>()
                 .eq(SortingManifestEntity::getManifestNo, manifestNos.get(0))));
@@ -138,6 +149,35 @@ public class MyBatisSortingRepository implements SortingRepository {
         stamp(entity);
         if (manifestItemMapper.insert(entity) <= 0) {
             throw new BusinessException(500, "failed to save manifest item");
+        }
+        return entity;
+    }
+
+    @Override
+    public List<SortingManifestPackageEntity> findManifestPackages(String manifestNo) {
+        return manifestPackageMapper.selectList(new LambdaQueryWrapper<SortingManifestPackageEntity>()
+                .eq(SortingManifestPackageEntity::getManifestNo, normalize(manifestNo))
+                .orderByAsc(SortingManifestPackageEntity::getExpectedSeqNo));
+    }
+
+    @Override
+    public Optional<SortingManifestPackageEntity> findManifestPackage(String manifestNo, String packageNo) {
+        return Optional.ofNullable(manifestPackageMapper.selectOne(new LambdaQueryWrapper<SortingManifestPackageEntity>()
+                .eq(SortingManifestPackageEntity::getManifestNo, normalize(manifestNo))
+                .eq(SortingManifestPackageEntity::getPackageNo, normalize(packageNo))));
+    }
+
+    @Override
+    @Transactional
+    public SortingManifestPackageEntity saveManifestPackage(SortingManifestPackageEntity entity) {
+        if (entity.getCreatedAt() == null) {
+            entity.setCreatedAt(LocalDateTime.now());
+        }
+        int affected = entity.getId() == null
+                ? manifestPackageMapper.insert(entity)
+                : manifestPackageMapper.updateById(entity);
+        if (affected <= 0) {
+            throw new BusinessException(500, "failed to save manifest package");
         }
         return entity;
     }
@@ -257,6 +297,7 @@ public class MyBatisSortingRepository implements SortingRepository {
     public boolean hasAnyData() {
         return totalPackageMapper.selectCount(null) > 0
                 || manifestMapper.selectCount(null) > 0
+                || manifestPackageMapper.selectCount(null) > 0
                 || manifestItemMapper.selectCount(null) > 0
                 || packageItemLineMapper.selectCount(null) > 0
                 || discrepancyVerificationMapper.selectCount(null) > 0;

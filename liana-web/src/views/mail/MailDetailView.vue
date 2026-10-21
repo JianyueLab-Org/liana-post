@@ -13,6 +13,7 @@
         <div><span class="text-gray-500">运单号：</span>{{ detail.waybillNo }}</div>
         <div><span class="text-gray-500">邮件范围：</span>{{ detail.mailScope }}</div>
         <div><span class="text-gray-500">邮件类型：</span>{{ detail.mailTypeCode }}</div>
+        <div><span class="text-gray-500">附加服务：</span>{{ (detail.additionalServices || (detail.mailTypeCode === 'R' ? ['REGISTRATION'] : [])).map(s => s === 'REGISTRATION' ? '挂号' : s).join('、') || '无' }}</div>
         <div><span class="text-gray-500">服务类型：</span>{{ detail.serviceType }}</div>
         <div v-if="detail.destCountryCode"><span class="text-gray-500">寄达国：</span>{{ detail.destCountryCode }}</div>
         <div><span class="text-gray-500">状态：</span>{{ detail.status }}</div>
@@ -27,6 +28,8 @@
         <TimelineView class="mt-4" :items="events" />
       </div>
     </div>
+    <section v-if="settlement" class="card p-5"><PostageSettlementDetail :value="settlement" /></section>
+    <p v-if="settlementNote" class="text-sm muted">{{ settlementNote }}</p>
   </div>
 </template>
 
@@ -35,14 +38,19 @@ import { onMounted, ref } from 'vue';
 import { useSessionStore } from '../../stores/session';
 import TimelineView from '../../components/TimelineView.vue';
 import { mailApi, trackingApi } from '../../lib/api';
+import { acceptanceApi } from '../../lib/postageAcceptance';
+import { canUsePostage } from '../../lib/postage';
+import PostageSettlementDetail from '../../components/PostageSettlementDetail.vue';
 
 const props = defineProps({ id: String });
 const session = useSessionStore();
 const detail = ref({});
 const events = ref([]);
+const settlement=ref(null),settlementNote=ref('');
 
 onMounted(async () => {
   detail.value = await mailApi.detail(props.id, session.token);
+  if(canUsePostage(session.user))try{settlement.value=await acceptanceApi.byWaybill(props.id,session.token);}catch(e){settlementNote.value=e.status===404?'历史邮件暂无邮资结算记录。':`邮资结算暂未加载：${e.message}`;}
   const payload = await trackingApi.listEventsByWaybill(props.id, session.token);
   events.value = payload
     .slice()

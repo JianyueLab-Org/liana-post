@@ -1,9 +1,13 @@
-﻿import { defineStore } from 'pinia';
-import { authApi, facilityApi } from '../lib/api';
-import { buildMenuTree } from '../lib/rbac';
+import { defineStore } from 'pinia';
+import { authApi, facilityApi } from '../lib/api.js';
+import { buildMenuTree } from '../lib/rbac.js';
 
 const TOKEN_KEY = 'liana_token';
 const USER_KEY = 'liana_user';
+function cachedUser() {
+  try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); }
+  catch { localStorage.removeItem(USER_KEY); return null; }
+}
 const KNOWN_FACILITY_TYPE_CODES = new Set([
   'POST_OFFICE',
   'TRANSFER_CENTER',
@@ -27,7 +31,7 @@ function normalizeFacilityTypeCode(value) {
 export const useSessionStore = defineStore('session', {
   state: () => ({
     token: localStorage.getItem(TOKEN_KEY) || '',
-    user: JSON.parse(localStorage.getItem(USER_KEY) || 'null'),
+    user: cachedUser(),
     currentFacility: null,
     menuTree: [],
     actionPermissions: [],
@@ -46,6 +50,13 @@ export const useSessionStore = defineStore('session', {
   },
   actions: {
     setSession(token, user) {
+      if (this.token !== (token || '') || this.user?.username !== user?.username) {
+        this.ready = false;
+        this.currentFacility = null;
+        this.menuTree = [];
+        this.actionPermissions = [];
+        this.dataPermissions = [];
+      }
       this.token = token || '';
       this.user = user || null;
       if (this.token) localStorage.setItem(TOKEN_KEY, this.token); else localStorage.removeItem(TOKEN_KEY);
@@ -58,8 +69,15 @@ export const useSessionStore = defineStore('session', {
       }
       const username = this.user?.username;
       if (username) {
-        const profile = await authApi.profile(username, this.token);
-        this.user = profile;
+        try {
+          this.user = await authApi.profile(username, this.token);
+        } catch (error) {
+          if (error.status === 401) this.logout();
+          throw error;
+        }
+      } else {
+        this.logout();
+        return;
       }
       if (this.user?.facilityCode) {
         try {
@@ -69,6 +87,7 @@ export const useSessionStore = defineStore('session', {
             facilityTypeCode: normalizeFacilityTypeCode(this.currentFacility?.typeCode || this.user.facilityTypeCode),
           };
         } catch (error) {
+          if (error.status === 401) { this.logout(); throw error; }
           this.currentFacility = null;
         }
       }

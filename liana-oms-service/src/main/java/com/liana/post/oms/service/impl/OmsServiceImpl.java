@@ -82,6 +82,7 @@ public class OmsServiceImpl implements OmsService {
         recipient = omsRepository.saveRecipient(recipient);
 
         String mailTypeCode = normalizeMailTypeCode(request.getMailTypeCode());
+        List<String> additionalServices = normalizeAdditionalServices(mailTypeCode, request.getAdditionalServices());
         if (omsRepository.findMailTypeByCode(mailTypeCode).isEmpty()) {
             throw new BusinessException(400, "unsupported mail type code");
         }
@@ -90,7 +91,8 @@ public class OmsServiceImpl implements OmsService {
         }
 
         MailEntity mail = new MailEntity();
-        mail.setWaybillNo(UpuBarcodeUtil.generateRandom(serviceIndicatorForMailType(mailTypeCode)));
+        mail.setWaybillNo(UpuBarcodeUtil.generateRandom(additionalServices.contains("REGISTRATION") ? "RR" : serviceIndicatorForMailType(mailTypeCode)));
+        mail.setAdditionalServices(String.join(",", additionalServices));
         mail.setMailTypeCode(mailTypeCode);
         mail.setServiceType(request.getServiceType().trim().toUpperCase());
         mail.setMailScope(mailScope);
@@ -103,9 +105,17 @@ public class OmsServiceImpl implements OmsService {
         mail.setDeclaredValue(request.getDeclaredValue());
         mail.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
         mail = omsRepository.saveMail(mail);
-        recordTracking(mail.getWaybillNo(), LogisticsConstants.TRACKING_EVENT_ACCEPTED, facilityCode, null, null, "{}");
-        evictMailCache(mail.getWaybillNo());
-        evictCandidateCache();
+        String acceptedWaybill=mail.getWaybillNo();
+        Runnable accepted=()->{
+            recordTracking(acceptedWaybill, LogisticsConstants.TRACKING_EVENT_ACCEPTED, facilityCode, null, null, "{}");
+            evictMailCache(acceptedWaybill);
+            evictCandidateCache();
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override public void afterCommit() { accepted.run(); }
+            });
+        } else accepted.run();
         return toResponse(mail);
     }
 
@@ -512,10 +522,21 @@ public class OmsServiceImpl implements OmsService {
         return value.trim().toUpperCase();
     }
 
+    static List<String> normalizeAdditionalServices(String product, List<String> requested) {
+        List<String> services = requested == null ? List.of() : requested;
+        if (services.size() != new java.util.HashSet<>(services).size()
+                || services.stream().anyMatch(s -> !"REGISTRATION".equals(s))
+                || (!services.isEmpty() && !java.util.Set.of("U", "R").contains(product))) {
+            throw new BusinessException(400, "unsupported additional services for mail product");
+        }
+        return "R".equals(product) ? List.of("REGISTRATION") : List.copyOf(services);
+    }
+
     static String serviceIndicatorForMailType(String mailTypeCode) {
         String normalized = mailTypeCode == null ? "" : mailTypeCode.trim().toUpperCase();
         return switch (normalized) {
             case OmsConstants.MAIL_TYPE_PACKAGE -> "CP";
+            case "U" -> "UU";
             case OmsConstants.MAIL_TYPE_REGISTERED -> "RR";
             case OmsConstants.MAIL_TYPE_EMS -> "EE";
             default -> throw new BusinessException(400, "unsupported mail type code");
@@ -544,6 +565,8 @@ public class OmsServiceImpl implements OmsService {
         response.setBagNo(mail.getBagNo());
         response.setPackageId(mail.getPackageId());
         response.setMailTypeCode(mail.getMailTypeCode());
+        response.setAdditionalServices(normalizeAdditionalServices(mail.getMailTypeCode(),
+                mail.getAdditionalServices() == null || mail.getAdditionalServices().isBlank() ? List.of() : List.of(mail.getAdditionalServices().split(","))));
         response.setServiceType(mail.getServiceType());
         response.setMailScope(normalizeMailScope(mail.getMailScope()));
         response.setDestCountryCode(mail.getDestCountryCode());

@@ -3,6 +3,9 @@ package com.liana.post.oms.model.dto;
 import java.math.BigDecimal;
 
 public class MailResponse {
+    private java.util.List<String> additionalServices;
+    public java.util.List<String> getAdditionalServices() { return additionalServices; }
+    public void setAdditionalServices(java.util.List<String> value) { additionalServices = value; }
     private Long id;
     private String waybillNo;
     private String bagNo;

@@ -58,9 +58,10 @@ async function login() {
       role: result.role,
       facilityCode: result.facilityCode,
     });
-    await session.bootstrap(true);
+    await session.bootstrap();
     router.push('/dashboard');
   } catch (err) {
+    session.logout();
     error.value = err?.message || '登录失败';
   } finally {
     loading.value = false;

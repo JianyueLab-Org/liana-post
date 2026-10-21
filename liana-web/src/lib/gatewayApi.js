@@ -1,4 +1,4 @@
-import { notifyApiError } from './apiErrorEvents';
+import { notifyApiError } from './apiErrorEvents.js';
 
 const SERVICE_PREFIX = {
   auth: '/liana-auth-service',
@@ -9,6 +9,7 @@ const SERVICE_PREFIX = {
   tracking: '/liana-records-service',
   transport: '/liana-transport-service',
   sync: '/liana-syncer',
+  postage: '/liana-postage-service',
 };
 
 export class ApiRequestError extends Error {

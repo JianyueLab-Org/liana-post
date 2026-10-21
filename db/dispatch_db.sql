@@ -60,6 +60,7 @@ INSERT INTO `dispatch_bag` VALUES (10, 'B202606151419192235333', 'B2', '', NULL,
 -- ----------------------------
 -- Table structure for dispatch_batch
 -- ----------------------------
+DROP TABLE IF EXISTS `dispatch_batch_bag`;
 DROP TABLE IF EXISTS `dispatch_batch`;
 CREATE TABLE `dispatch_batch`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -77,6 +78,16 @@ CREATE TABLE `dispatch_batch`  (
   INDEX `idx_dispatch_batch_status`(`status` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
+CREATE TABLE `dispatch_batch_bag` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `batch_no` varchar(32) NOT NULL,
+  `bag_no` varchar(32) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_dispatch_batch_bag` (`bag_no`),
+  KEY `idx_dispatch_batch_bag_batch` (`batch_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ----------------------------
 -- Records of dispatch_batch
 -- ----------------------------
@@ -86,6 +97,9 @@ INSERT INTO `dispatch_batch` VALUES (3, 'D202606142113555816192', 'B202606142113
 INSERT INTO `dispatch_batch` VALUES (4, 'D202606142257393198422', 'B202606142257385910126', NULL, 'APPROVED', 1, '2026-06-14 23:03:20', '2026-06-14 23:03:20', '2026-06-14 23:03:20');
 INSERT INTO `dispatch_batch` VALUES (5, 'D202606151239228401947', 'B202606151239221266281', NULL, 'HANDED_OFF', NULL, NULL, '2026-06-15 12:39:37', '2026-06-15 12:39:37');
 INSERT INTO `dispatch_batch` VALUES (6, 'D202606151419194817070', 'B202606151419192235333', NULL, 'HANDED_OFF', NULL, NULL, '2026-06-15 14:20:24', '2026-06-15 14:20:24');
+
+INSERT INTO `dispatch_batch_bag` (`batch_no`, `bag_no`)
+SELECT `batch_no`, `bag_no` FROM `dispatch_batch`;
 
 -- ----------------------------
 -- Table structure for dispatch_transport_task_link

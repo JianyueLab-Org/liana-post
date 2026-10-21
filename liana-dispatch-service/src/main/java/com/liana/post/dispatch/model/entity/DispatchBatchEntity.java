@@ -3,7 +3,9 @@ package com.liana.post.dispatch.model.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @TableName("dispatch_batch")
 public class DispatchBatchEntity {
@@ -11,6 +13,8 @@ public class DispatchBatchEntity {
     private Long id;
     private String batchNo;
     private String bagNo;
+    @TableField(exist = false)
+    private List<String> bagNos;
     private String routeCode;
     private String status;
     private Long approvedBy;
@@ -24,6 +28,8 @@ public class DispatchBatchEntity {
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public String getBagNo() { return bagNo; }
     public void setBagNo(String bagNo) { this.bagNo = bagNo; }
+    public List<String> getBagNos() { return bagNos; }
+    public void setBagNos(List<String> bagNos) { this.bagNos = bagNos; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
     public String getStatus() { return status; }

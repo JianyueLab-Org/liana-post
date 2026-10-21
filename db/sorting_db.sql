@@ -151,6 +151,23 @@ INSERT INTO `sorting_manifest` VALUES (6, 'B202606151419192235333', 'TRANSIT', '
 -- ----------------------------
 -- Table structure for sorting_manifest_item
 -- ----------------------------
+DROP TABLE IF EXISTS `sorting_manifest_package`;
+CREATE TABLE `sorting_manifest_package` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `manifest_no` varchar(64) NOT NULL,
+  `package_no` varchar(64) NOT NULL,
+  `expected_seq_no` int NOT NULL,
+  `expected_weight` decimal(12,3) DEFAULT NULL,
+  `actual_weight` decimal(12,3) DEFAULT NULL,
+  `seal_no` varchar(64) DEFAULT NULL,
+  `item_status` varchar(16) NOT NULL DEFAULT 'EXPECTED',
+  `received_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_manifest_package` (`manifest_no`, `package_no`),
+  KEY `idx_manifest_package_package` (`package_no`, `item_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP TABLE IF EXISTS `sorting_manifest_item`;
 CREATE TABLE `sorting_manifest_item`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -237,5 +254,34 @@ INSERT INTO `sorting_total_package` VALUES (17, 'B202606161643489394950', 'EXPOR
 INSERT INTO `sorting_total_package` VALUES (18, 'B202606161643592456940', 'EXPORT', 'SEALED', 'A2', 'JP', NULL, NULL, 1, NULL, NULL, NULL, NULL, 'COUNTRY_SLOT', 1, NULL, '2026-06-16 16:43:59', '2026-06-16 16:43:59');
 INSERT INTO `sorting_total_package` VALUES (19, 'JP', 'TRANSIT', 'OPENING', 'A2', 'JP', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, '2026-06-16 16:44:17', '2026-06-16 16:44:17');
 INSERT INTO `sorting_total_package` VALUES (20, 'B202606161644170267241', 'TRANSIT', 'SEALED', 'A2', 'JP', 'JP', NULL, 0, '2026-06-16 16:44:18', NULL, NULL, NULL, NULL, 1, NULL, '2026-06-16 16:44:17', '2026-06-16 16:44:18');
+
+INSERT IGNORE INTO `sorting_manifest_package`
+  (`manifest_no`, `package_no`, `expected_seq_no`, `item_status`)
+SELECT grouped.`manifest_no`, grouped.`package_no`,
+       ROW_NUMBER() OVER (PARTITION BY grouped.`manifest_no` ORDER BY grouped.`package_no`),
+       CASE WHEN package_record.`package_status` IN ('RECEIVED', 'OPENING', 'OPENED') THEN 'RECEIVED' ELSE 'EXPECTED' END
+FROM (
+  SELECT `manifest_no`, `expected_package_no` AS `package_no`
+  FROM `sorting_manifest_item`
+  WHERE `expected_package_no` IS NOT NULL AND `expected_package_no` <> ''
+  GROUP BY `manifest_no`, `expected_package_no`
+) grouped
+LEFT JOIN `sorting_total_package` package_record
+  ON package_record.`package_no` = grouped.`package_no`;
+
+INSERT IGNORE INTO `sorting_manifest_package`
+  (`manifest_no`, `package_no`, `expected_seq_no`, `item_status`)
+SELECT manifest.`manifest_no`, manifest.`manifest_no`, 1,
+       CASE WHEN package_record.`package_status` IN ('RECEIVED', 'OPENING', 'OPENED') THEN 'RECEIVED' ELSE 'EXPECTED' END
+FROM `sorting_manifest` manifest
+JOIN `sorting_total_package` package_record
+  ON package_record.`package_no` = manifest.`manifest_no`
+WHERE manifest.`expected_package_qty` = 1;
+
+UPDATE `sorting_total_package` package_record
+JOIN `sorting_manifest_package` manifest_package
+  ON manifest_package.`package_no` = package_record.`package_no`
+SET package_record.`manifest_no` = manifest_package.`manifest_no`
+WHERE package_record.`manifest_no` IS NULL OR package_record.`manifest_no` = '';
 
 SET FOREIGN_KEY_CHECKS = 1;

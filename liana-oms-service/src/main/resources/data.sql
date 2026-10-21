@@ -1,5 +1,6 @@
 INSERT INTO `mail_type` (`code`, `name`, `description`, `requires_signature`) VALUES
 ('C', '包裹', '普通包裹', 0),
+('U', '信函', '可选挂号的信函', 0),
 ('R', '挂号信', '挂号信邮件', 1),
 ('E', 'EMS', '特快专递', 1);
 

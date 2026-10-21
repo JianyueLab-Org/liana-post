@@ -503,6 +503,7 @@ public class MyBatisOmsRepository implements OmsRepository {
         }
 
         saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_PACKAGE, "PACKAGE", "package mail", 0));
+        saveMailType(createMailType("U", "信函", "letter with optional registration", 0));
         saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_REGISTERED, "REGISTERED", "registered mail", 1));
         saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_EMS, "EMS", "express mail", 1));
 

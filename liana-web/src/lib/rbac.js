@@ -1,3 +1,5 @@
+import { canUsePostage } from './postage.js';
+
 const ROLE_MENU_RULES = {
   CLERK: {
     top: ['dashboard', 'mail', 'catalog', 'dispatch', 'sorting', 'tracking', 'delivery'],
@@ -207,6 +209,13 @@ export function buildMenuTree(profile = {}) {
       });
     if (!children.length) continue;
     nodes.push({ ...entry, children });
+  }
+  if (canUsePostage(profile)) {
+    const children = [{ id: 'postage-quote', name: '邮资报价', path: '/postage/quote' }, { id: 'postage-retail', name: '邮资零售', path: '/postage/retail' }];
+    children.push({id:'postage-acceptances',name:'收寄结算',path:'/postage/acceptances'});
+    if (profile.role === 'ADMIN') children.push({ id: 'postage-tariffs', name: '资费管理', path: '/postage/tariffs' });
+    if (profile.role === 'ADMIN') children.push({ id: 'postage-stamp-policy', name: '邮票发行规则', path: '/postage/stamp-policy' });
+    nodes.splice(1, 0, { id: 'postage', name: '邮资业务', path: '/postage/quote', kind: 'group', children });
   }
   return nodes;
 }

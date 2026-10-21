@@ -1,9 +1,13 @@
 package com.liana.post.dispatch.model.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class DispatchBatchResponse {
     private Long id;
     private String batchNo;
     private String bagNo;
+    private List<String> bagNos = new ArrayList<>();
     private String routeCode;
     private String status;
     private Long approvedBy;
@@ -15,6 +19,8 @@ public class DispatchBatchResponse {
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public String getBagNo() { return bagNo; }
     public void setBagNo(String bagNo) { this.bagNo = bagNo; }
+    public List<String> getBagNos() { return bagNos; }
+    public void setBagNos(List<String> bagNos) { this.bagNos = bagNos; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
     public String getStatus() { return status; }

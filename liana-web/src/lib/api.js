@@ -1,5 +1,5 @@
-import { notifyApiError } from './apiErrorEvents';
-import { ApiRequestError, request } from './gatewayApi';
+import { notifyApiError } from './apiErrorEvents.js';
+import { ApiRequestError, request } from './gatewayApi.js';
 
 function unwrapList(payload) {
   if (Array.isArray(payload)) return payload;

@@ -2,6 +2,7 @@ CREATE DATABASE IF NOT EXISTS `dispatch_db` DEFAULT CHARACTER SET utf8mb4 COLLAT
 USE `dispatch_db`;
 
 DROP TABLE IF EXISTS `handoff_record`;
+DROP TABLE IF EXISTS `dispatch_batch_bag`;
 DROP TABLE IF EXISTS `dispatch_batch`;
 DROP TABLE IF EXISTS `dispatch_bag`;
 DROP TABLE IF EXISTS `route_rule`;
@@ -64,6 +65,16 @@ CREATE TABLE `dispatch_batch` (
   KEY `idx_dispatch_batch_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `dispatch_batch_bag` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `batch_no` VARCHAR(32) NOT NULL,
+  `bag_no` VARCHAR(32) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_dispatch_batch_bag` (`bag_no`),
+  KEY `idx_dispatch_batch_bag_batch` (`batch_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `handoff_record` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `handoff_no` VARCHAR(32) NOT NULL,
@@ -95,6 +106,9 @@ INSERT INTO `dispatch_bag` (`bag_no`, `origin_facility_code`, `destination_facil
 
 INSERT INTO `dispatch_batch` (`batch_no`, `bag_no`, `route_code`, `status`) VALUES
 ('D202606090001', 'B202606090001', 'B1-C1-TRUCK', 'PENDING');
+
+INSERT INTO `dispatch_batch_bag` (`batch_no`, `bag_no`) VALUES
+('D202606090001', 'B202606090001');
 
 INSERT INTO `handoff_record` (`handoff_no`, `bag_no`, `batch_no`, `from_facility_code`, `to_facility_code`, `handoff_time`, `status`) VALUES
 ('H202606090001', 'B202606090001', 'D202606090001', 'B1', 'C1', '2026-06-09 08:00:00', 'PENDING');

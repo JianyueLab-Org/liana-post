@@ -1,6 +1,12 @@
-﻿import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import LoginView from '../views/LoginView.vue';
+import { canUsePostage } from '../lib/postage';
+import PostageQuoteView from '../views/postage/PostageQuoteView.vue';
+import PostageTariffsView from '../views/postage/PostageTariffsView.vue';
+import PostageRetailView from '../views/postage/PostageRetailView.vue';
+import PostageStampPolicyView from '../views/postage/PostageStampPolicyView.vue';
+import PostageAcceptancesView from '../views/postage/PostageAcceptancesView.vue';
 import LayoutView from '../views/layout/LayoutView.vue';
 import DashboardView from '../views/dashboard/DashboardView.vue';
 import MailCreateView from '../views/mail/MailCreateView.vue';
@@ -50,6 +56,12 @@ const routes = [
     children: [
       { path: '', redirect: '/dashboard' },
       { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { title: '工作台' } },
+      { path: '/postage/quote', component: PostageQuoteView, meta: { title: '邮资报价', postage: true } },
+      { path: '/postage/retail', component: PostageRetailView, meta: { title: '邮资零售', postage: true } },
+      { path: '/postage/acceptances', component: PostageAcceptancesView, meta: { title: '收寄结算', postage: true } },
+      { path: '/postage/stamp-policy', component: PostageStampPolicyView, meta: { title: '邮票发行规则', postage: true, postageAdmin: true } },
+      { path: '/postage/tariffs', component: PostageTariffsView, meta: { title: '资费管理', postage: true, postageAdmin: true } },
+      { path: '/postage', redirect: '/postage/quote' },
       { path: '/mail/create', name: 'mail-create', component: MailCreateView, meta: { title: '收寄录入', action: 'MAIL_CREATE' } },
       { path: '/mail/list', name: 'mail-list', component: MailListView, meta: { title: '邮件台账', action: 'MAIL_QUERY' } },
       { path: '/mail/detail/:id', name: 'mail-detail', component: MailDetailView, props: true, meta: { title: '邮件详情', action: 'MAIL_QUERY' } },
@@ -106,11 +118,25 @@ const router = createRouter({ history: createWebHistory(), routes, scrollBehavio
 router.beforeEach(async (to) => {
   const session = useSessionStore();
   if (to.meta.public) {
-    if (to.path === '/login' && session.token) return '/dashboard';
+    if (to.path === '/login' && session.token) {
+      try {
+        if (!session.ready) await session.bootstrap();
+        if (session.token && session.ready) return '/dashboard';
+      } catch {
+        // Keep login reachable even if the cached session cannot be restored.
+        session.logout();
+      }
+    }
     return true;
   }
   if (!session.token) return '/login';
-  if (!session.ready) await session.bootstrap();
+  if (!session.ready) {
+    try { await session.bootstrap(); }
+    catch { session.logout(); return '/login'; }
+  }
+  if (!session.token) return '/login';
+  if (to.meta.postage && !canUsePostage(session.user || {})) return '/dashboard';
+  if (to.meta.postageAdmin && session.user?.role !== 'ADMIN') return '/dashboard';
   if (to.path.startsWith('/sorting') && !session.isSortingFacility) {
     return '/dashboard';
   }

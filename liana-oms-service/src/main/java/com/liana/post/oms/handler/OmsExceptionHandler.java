@@ -9,6 +9,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class OmsExceptionHandler {
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public org.springframework.http.ResponseEntity<Result<Void>> handleStatus(org.springframework.web.server.ResponseStatusException exception) {
+        return org.springframework.http.ResponseEntity.status(exception.getStatusCode()).body(Result.error(exception.getReason(),exception.getStatusCode().value()));
+    }
+
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusiness(BusinessException exception) {
         return Result.error(exception.getMessage(), exception.getCode());

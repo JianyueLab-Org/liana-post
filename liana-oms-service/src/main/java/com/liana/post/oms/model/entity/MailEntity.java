@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 
 @TableName("mail")
 public class MailEntity {
+    private String additionalServices;
+    public String getAdditionalServices() { return additionalServices; }
+    public void setAdditionalServices(String value) { additionalServices = value; }
     @TableId(type = IdType.AUTO)
     private Long id;
     private String waybillNo;

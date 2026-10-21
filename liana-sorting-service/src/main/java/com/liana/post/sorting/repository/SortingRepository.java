@@ -4,6 +4,7 @@ import com.liana.post.sorting.model.entity.DiscrepancyVerificationEntity;
 import com.liana.post.sorting.model.entity.PackageItemLineEntity;
 import com.liana.post.sorting.model.entity.SortingManifestEntity;
 import com.liana.post.sorting.model.entity.SortingManifestItemEntity;
+import com.liana.post.sorting.model.entity.SortingManifestPackageEntity;
 import com.liana.post.sorting.model.entity.SortingTotalPackageEntity;
 
 import java.util.List;
@@ -19,6 +20,9 @@ public interface SortingRepository {
     List<SortingManifestEntity> findAllManifests();
     List<SortingManifestItemEntity> findManifestItems(String manifestNo);
     SortingManifestItemEntity saveManifestItem(SortingManifestItemEntity entity);
+    List<SortingManifestPackageEntity> findManifestPackages(String manifestNo);
+    Optional<SortingManifestPackageEntity> findManifestPackage(String manifestNo, String packageNo);
+    SortingManifestPackageEntity saveManifestPackage(SortingManifestPackageEntity entity);
     Optional<SortingManifestEntity> findManifestByExpectedPackageNo(String packageNo);
     PackageItemLineEntity savePackageItemLine(PackageItemLineEntity entity);
     List<PackageItemLineEntity> findPackageLinesByItem(String itemNo);

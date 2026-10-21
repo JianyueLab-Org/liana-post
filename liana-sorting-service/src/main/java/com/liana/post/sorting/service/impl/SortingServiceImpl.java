@@ -21,6 +21,7 @@ import com.liana.post.sorting.model.entity.DiscrepancyVerificationEntity;
 import com.liana.post.sorting.model.entity.PackageItemLineEntity;
 import com.liana.post.sorting.model.entity.SortingManifestEntity;
 import com.liana.post.sorting.model.entity.SortingManifestItemEntity;
+import com.liana.post.sorting.model.entity.SortingManifestPackageEntity;
 import com.liana.post.sorting.model.entity.SortingTotalPackageEntity;
 import com.liana.post.sorting.repository.SortingRepository;
 import com.liana.post.sorting.strategy.RoutingStrategy;
@@ -79,7 +80,7 @@ public class SortingServiceImpl implements SortingService {
         manifest.setDestinationOrgCode(request.getTargetNode());
         manifest.setManifestType("TRANSIT");
         if (!isManifestChecked(manifest)) {
-            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_RECEIVED);
+            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_PREALERT);
         }
         manifest.setPrealertFlag(1);
         manifest.setExpectedPackageQty(request.getTotalPackages() == null ? 0 : request.getTotalPackages().size());
@@ -99,10 +100,23 @@ public class SortingServiceImpl implements SortingService {
                 .map(value -> value == null ? null : value.toUpperCase())
                 .collect(Collectors.toSet());
         if (request.getTotalPackages() != null) {
+            int packageSeq = 0;
             for (TotalPackageDTO totalPackage : request.getTotalPackages()) {
                 if (totalPackage == null || !StringUtils.hasText(totalPackage.getPackageNo())) {
                     continue;
                 }
+                String packageNo = totalPackage.getPackageNo().trim().toUpperCase();
+                SortingManifestPackageEntity manifestPackage = sortingRepository
+                        .findManifestPackage(saved.getManifestNo(), packageNo)
+                        .orElseGet(SortingManifestPackageEntity::new);
+                manifestPackage.setManifestNo(saved.getManifestNo());
+                manifestPackage.setPackageNo(packageNo);
+                manifestPackage.setExpectedSeqNo(++packageSeq);
+                manifestPackage.setExpectedWeight(totalPackage.getPackageWeight());
+                if (!StringUtils.hasText(manifestPackage.getItemStatus())) {
+                    manifestPackage.setItemStatus("EXPECTED");
+                }
+                sortingRepository.saveManifestPackage(manifestPackage);
                 if (totalPackage.getItems() == null) {
                     continue;
                 }
@@ -136,12 +150,25 @@ public class SortingServiceImpl implements SortingService {
         }
         SortingManifestEntity manifest = null;
         if (isPrealert(request) && StringUtils.hasText(request.getManifestNo())) {
-            manifest = ensureManifest(request);
+            manifest = sortingRepository.findManifestByNo(request.getManifestNo())
+                    .orElseThrow(() -> new BusinessException(404, "prealert manifest not found: " + request.getManifestNo()));
         } else {
             manifest = resolveManifestForPackages(packageNos);
         }
+        if (isPrealert(request) && manifest == null) {
+            throw new BusinessException(404, "prealert manifest could not be resolved for scanned packages");
+        }
         SortingTotalPackageEntity first = null;
+        boolean unexpectedPackage = false;
         for (String packageNo : packageNos) {
+            SortingManifestPackageEntity manifestPackage = manifest == null
+                    ? null
+                    : sortingRepository.findManifestPackage(manifest.getManifestNo(), packageNo).orElse(null);
+            if (manifest != null && manifestPackage == null) {
+                unexpectedPackage = true;
+                saveDiscrepancy(manifest.getManifestNo(), packageNo, null, SortingConstants.DISCREPANCY_SURPLUS,
+                        SortingConstants.SOURCE_MANIFEST, 0, 1);
+            }
             SortingTotalPackageEntity totalPackage = sortingRepository.findTotalPackageByNo(packageNo).orElseGet(() -> {
                 SortingTotalPackageEntity pkg = new SortingTotalPackageEntity();
                 pkg.setPackageNo(packageNo);
@@ -160,17 +187,31 @@ public class SortingServiceImpl implements SortingService {
             totalPackage.setReceivedAt(LocalDateTime.now());
             totalPackage.setManifestNo(manifest == null ? request.getManifestNo() : manifest.getManifestNo());
             sortingRepository.updateTotalPackage(totalPackage);
+            if (manifestPackage != null) {
+                manifestPackage.setItemStatus("RECEIVED");
+                manifestPackage.setReceivedAt(LocalDateTime.now());
+                sortingRepository.saveManifestPackage(manifestPackage);
+            }
             if (first == null) {
                 first = totalPackage;
             }
         }
-        recordTracking(packageNos.get(0), SortingConstants.EVENT_RECEIVE, request.getStationCode(), request.getOperatorId(),
-                "{\"mode\":\"" + request.getReceiveMode() + "\",\"packageCount\":" + packageNos.size() + "}");
-        if (manifest != null && isManifestReceiveComplete(manifest)) {
-            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_CHECKED);
+        for (String packageNo : packageNos) {
+            recordTracking(packageNo, SortingConstants.EVENT_RECEIVE, request.getStationCode(), request.getOperatorId(),
+                    "{\"mode\":\"" + request.getReceiveMode() + "\",\"manifestNo\":\""
+                            + (manifest == null ? "" : escapeJson(manifest.getManifestNo())) + "\"}");
+        }
+        if (manifest != null) {
+            boolean complete = isManifestReceiveComplete(manifest);
+            manifest.setManifestStatus(unexpectedPackage || SortingConstants.MANIFEST_STATUS_DISCREPANCY.equalsIgnoreCase(manifest.getManifestStatus())
+                    ? SortingConstants.MANIFEST_STATUS_DISCREPANCY
+                    : complete ? SortingConstants.MANIFEST_STATUS_CHECKED : SortingConstants.MANIFEST_STATUS_RECEIVING);
             manifest.setUpdatedAt(LocalDateTime.now());
             sortingRepository.saveManifest(manifest);
-            notifyDispatchArrived(manifest.getManifestNo(), first.getPackageNo(), request.getStationCode(), "sorting receive completed");
+            for (String packageNo : packageNos) {
+                notifyDispatchArrived(manifest.getManifestNo(), packageNo, request.getStationCode(),
+                        complete ? "sorting receive completed" : "sorting package received");
+            }
         }
         return toPackageResponse(first);
     }
@@ -191,7 +232,11 @@ public class SortingServiceImpl implements SortingService {
         List<SortingLineResponse> responses = new ArrayList<>();
         boolean prealert = SortingConstants.SCAN_MODE_PREALERT.equalsIgnoreCase(request.getScanMode()) && StringUtils.hasText(request.getManifestNo());
         Set<String> actual = new LinkedHashSet<>();
-        Set<String> expected = prealert ? sortingRepository.findManifestItems(request.getManifestNo()).stream().map(SortingManifestItemEntity::getItemNo).collect(Collectors.toCollection(LinkedHashSet::new)) : Set.of();
+        Set<String> expected = prealert ? sortingRepository.findManifestItems(request.getManifestNo()).stream()
+                .filter(item -> request.getPackageNo().equalsIgnoreCase(item.getExpectedPackageNo()))
+                .map(SortingManifestItemEntity::getItemNo)
+                .map(value -> value.trim().toUpperCase())
+                .collect(Collectors.toCollection(LinkedHashSet::new)) : Set.of();
 
         for (SortingUnpackItemRequest.SortingUnpackItemEntry entry : request.getItems()) {
             actual.add(entry.getItemNo());
@@ -623,10 +668,23 @@ public class SortingServiceImpl implements SortingService {
         response.setItems(items.stream()
                 .map(this::toManifestItemResponse)
                 .toList());
-        List<SortingPackageResponse> packages = sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo()).stream()
-                .map(this::toPackageResponse)
-                .toList();
-        if (packages.isEmpty()) {
+        List<SortingManifestPackageEntity> manifestPackages = sortingRepository.findManifestPackages(manifest.getManifestNo());
+        List<SortingPackageResponse> packages;
+        if (!manifestPackages.isEmpty()) {
+            packages = new ArrayList<>(manifestPackages.stream()
+                    .map(item -> sortingRepository.findTotalPackageByNo(item.getPackageNo())
+                            .map(this::toPackageResponse)
+                            .orElseGet(() -> toExpectedPackageResponse(manifest, item)))
+                    .toList());
+            Set<String> expectedPackageNos = manifestPackages.stream()
+                    .map(SortingManifestPackageEntity::getPackageNo)
+                    .map(value -> value.trim().toUpperCase())
+                    .collect(Collectors.toSet());
+            sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo()).stream()
+                    .filter(item -> !expectedPackageNos.contains(item.getPackageNo().trim().toUpperCase()))
+                    .map(this::toPackageResponse)
+                    .forEach(packages::add);
+        } else {
             packages = expectedPackagesFromItems(manifest, items);
         }
         response.setPackages(packages);
@@ -702,24 +760,6 @@ public class SortingServiceImpl implements SortingService {
                 .toList();
     }
 
-    private SortingManifestEntity ensureManifest(SortingReceiveRequest request) {
-        SortingManifestEntity manifest = sortingRepository.findManifestByNo(request.getManifestNo()).orElse(null);
-        if (manifest != null) {
-            return manifest;
-        }
-        SortingManifestEntity entity = new SortingManifestEntity();
-        entity.setManifestNo(request.getManifestNo());
-        entity.setManifestType("TRANSIT");
-        entity.setSourceOrgCode(request.getStationCode());
-        entity.setDestinationOrgCode(request.getStationCode());
-        entity.setBatchNo(request.getIdempotencyKey() == null ? IdGeneratorUtil.generateDispatchNo() : request.getIdempotencyKey());
-        entity.setManifestStatus(SortingConstants.MANIFEST_STATUS_RECEIVED);
-        entity.setPrealertFlag(1);
-        entity.setExpectedItemQty(0);
-        entity.setExpectedPackageQty(request.getPackageNos().size());
-        return sortingRepository.saveManifest(entity);
-    }
-
     private SortingManifestEntity resolveManifestForPackages(List<String> packageNos) {
         if (packageNos == null || packageNos.isEmpty()) {
             return null;
@@ -745,21 +785,29 @@ public class SortingServiceImpl implements SortingService {
         if (totalPackage == null || !StringUtils.hasText(totalPackage.getPackageNo()) || !StringUtils.hasText(destinationOrgCode)) {
             return;
         }
-        String manifestNo = totalPackage.getPackageNo().trim().toUpperCase();
+        String manifestNo = IdGeneratorUtil.generateDispatchNo();
         String normalizedDestination = normalizeBlank(destinationOrgCode);
-        SortingManifestEntity manifest = sortingRepository.findManifestByNo(manifestNo).orElseGet(SortingManifestEntity::new);
+        SortingManifestEntity manifest = new SortingManifestEntity();
         manifest.setManifestNo(manifestNo);
         manifest.setBatchNo(manifestNo);
         manifest.setSourceOrgCode(normalizeBlank(stationCode));
         manifest.setDestinationOrgCode(normalizedDestination);
         manifest.setManifestType(SortingConstants.PACKAGE_LEVEL_TRANSIT);
         if (!isManifestChecked(manifest)) {
-            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_RECEIVED);
+            manifest.setManifestStatus(SortingConstants.MANIFEST_STATUS_PREALERT);
         }
         manifest.setPrealertFlag(1);
         manifest.setExpectedPackageQty(1);
         manifest.setExpectedItemQty(itemNos == null ? 0 : itemNos.size());
         sortingRepository.saveManifest(manifest);
+
+        SortingManifestPackageEntity manifestPackage = sortingRepository.findManifestPackage(manifestNo, totalPackage.getPackageNo())
+                .orElseGet(SortingManifestPackageEntity::new);
+        manifestPackage.setManifestNo(manifestNo);
+        manifestPackage.setPackageNo(totalPackage.getPackageNo().trim().toUpperCase());
+        manifestPackage.setExpectedSeqNo(1);
+        manifestPackage.setItemStatus("EXPECTED");
+        sortingRepository.saveManifestPackage(manifestPackage);
 
         Set<String> existing = sortingRepository.findManifestItems(manifestNo).stream()
                 .map(SortingManifestItemEntity::getItemNo)
@@ -778,7 +826,7 @@ public class SortingServiceImpl implements SortingService {
             SortingManifestItemEntity line = new SortingManifestItemEntity();
             line.setManifestNo(manifestNo);
             line.setItemNo(normalizedItemNo);
-            line.setExpectedPackageNo(manifestNo);
+            line.setExpectedPackageNo(totalPackage.getPackageNo().trim().toUpperCase());
             line.setExpectedSeqNo(++seq);
             line.setExpectedRouteCode(normalizedDestination);
             line.setExpectedQty(1);
@@ -1117,15 +1165,22 @@ public class SortingServiceImpl implements SortingService {
         if (manifest == null || !StringUtils.hasText(manifest.getManifestNo())) {
             return false;
         }
-        long receivedPackageCount = sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo()).stream()
+        List<SortingManifestPackageEntity> expectedPackages = sortingRepository.findManifestPackages(manifest.getManifestNo());
+        if (expectedPackages.isEmpty()) {
+            return false;
+        }
+        Set<String> expected = expectedPackages.stream()
+                .map(SortingManifestPackageEntity::getPackageNo)
+                .filter(StringUtils::hasText)
+                .map(value -> value.trim().toUpperCase())
+                .collect(Collectors.toSet());
+        Set<String> received = sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo()).stream()
                 .filter(this::isReceiveCheckedPackage)
                 .map(SortingTotalPackageEntity::getPackageNo)
                 .filter(StringUtils::hasText)
                 .map(value -> value.trim().toUpperCase())
-                .distinct()
-                .count();
-        int expectedPackageQty = manifest.getExpectedPackageQty() == null ? 0 : manifest.getExpectedPackageQty();
-        return receivedPackageCount > 0 && (expectedPackageQty <= 0 || receivedPackageCount >= expectedPackageQty);
+                .collect(Collectors.toSet());
+        return !expected.isEmpty() && expected.equals(received);
     }
 
     private boolean isReceiveCheckedPackage(SortingTotalPackageEntity totalPackage) {
@@ -1150,6 +1205,11 @@ public class SortingServiceImpl implements SortingService {
         }
         if (StringUtils.hasText(facilityCode) && !facilityCode.trim().equalsIgnoreCase(manifest.getDestinationOrgCode())) {
             return false;
+        }
+        List<SortingManifestPackageEntity> expectedPackages = sortingRepository.findManifestPackages(manifest.getManifestNo());
+        if (!expectedPackages.isEmpty()) {
+            return !isManifestChecked(manifest)
+                    && expectedPackages.stream().anyMatch(item -> !"RECEIVED".equalsIgnoreCase(item.getItemStatus()));
         }
         List<SortingTotalPackageEntity> packages = sortingRepository.findTotalPackagesByManifest(manifest.getManifestNo());
         return packages.isEmpty() || packages.stream().anyMatch(this::isVisibleTransitPackage);
@@ -1248,6 +1308,18 @@ public class SortingServiceImpl implements SortingService {
                     return response;
                 })
                 .toList();
+    }
+
+    private SortingPackageResponse toExpectedPackageResponse(SortingManifestEntity manifest, SortingManifestPackageEntity item) {
+        SortingPackageResponse response = new SortingPackageResponse();
+        response.setPackageNo(item.getPackageNo());
+        response.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
+        response.setPackageStatus("EXPECTED");
+        response.setSourceOrgCode(manifest.getSourceOrgCode());
+        response.setDestinationOrgCode(manifest.getDestinationOrgCode());
+        response.setManifestNo(manifest.getManifestNo());
+        response.setPrealertFlag(1);
+        return response;
     }
 
     private List<com.liana.post.oms.model.dto.MailResponse> loadInternationalMails(String stationCode) {

@@ -179,22 +179,51 @@ public class DispatchServiceImpl implements DispatchService {
         syncRequest.setCurrentFacilityCode(request.getOriginFacilityCode());
         syncRequest.setMailNoList(mailNos);
         DispatchBagResponse bag = syncMailBag(syncRequest);
-        createDispatchBatchAuto(entity);
-        syncManifestToSorting(bag.getBagNo(), bag.getRouteCode(), bag.getTotalWeightGrams(),
-                request.getOriginFacilityCode(), resolvedTargetFacilityCode, mailNos);
         return bag;
     }
 
     @Override
     @Transactional
     public DispatchBatchResponse createDispatchBatch(DispatchBatchCreateRequest request) {
-        DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getBagNo())
-                .orElseThrow(() -> new BusinessException(404, "dispatch bag not found"));
+        List<String> requestedBagNos = request.getBagNos() == null || request.getBagNos().isEmpty()
+                ? (request.getBagNo() == null || request.getBagNo().isBlank() ? List.of() : List.of(request.getBagNo()))
+                : request.getBagNos();
+        List<DispatchBagEntity> bags = requestedBagNos.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim).map(String::toUpperCase).distinct()
+                .map(bagNo -> dispatchRepository.findDispatchBagByBagNo(bagNo)
+                        .orElseThrow(() -> new BusinessException(404, "dispatch bag not found: " + bagNo)))
+                .toList();
+        if (bags.isEmpty()) {
+            throw new BusinessException(400, "bagNo or bagNos is required");
+        }
+        DispatchBagEntity bag = bags.get(0);
+        String routeCode = request.getRouteCode() == null || request.getRouteCode().isBlank()
+                ? bag.getRouteCode() : request.getRouteCode().trim();
+        if (!java.util.Objects.equals(routeCode, bag.getRouteCode())) {
+            throw new BusinessException(400, "dispatch batch route must match the bag route");
+        }
+        for (DispatchBagEntity candidate : bags) {
+            if (!java.util.Objects.equals(candidate.getOriginFacilityCode(), bag.getOriginFacilityCode())
+                    || !java.util.Objects.equals(candidate.getDestinationFacilityCode(), bag.getDestinationFacilityCode())
+                    || !java.util.Objects.equals(candidate.getRouteCode(), bag.getRouteCode())) {
+                throw new BusinessException(400, "all bags in a dispatch batch must share origin, destination, and route");
+            }
+            if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(candidate.getStatus())
+                    || DispatchConstants.BAG_STATUS_ARRIVED.equals(candidate.getStatus())) {
+                throw new BusinessException(409, "dispatched bags cannot be added to a new batch");
+            }
+        }
         DispatchBatchEntity entity = new DispatchBatchEntity();
         entity.setBagNo(bag.getBagNo());
-        entity.setRouteCode(request.getRouteCode() == null || request.getRouteCode().isBlank() ? bag.getRouteCode() : request.getRouteCode().trim());
+        entity.setRouteCode(routeCode);
         entity.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
         entity = dispatchRepository.saveDispatchBatch(entity);
+        List<String> bagNos = bags.stream().map(DispatchBagEntity::getBagNo).toList();
+        dispatchRepository.replaceBatchBags(entity.getBatchNo(), bagNos);
+        entity.setBagNos(bagNos);
+        syncManifestToSorting("M" + entity.getBatchNo(), routeCode, bag.getOriginFacilityCode(),
+                bag.getDestinationFacilityCode(), bags);
         return toBatchResponse(entity);
     }
 
@@ -203,6 +232,9 @@ public class DispatchServiceImpl implements DispatchService {
     public DispatchBatchResponse approveDispatchBatch(String batchNo, DispatchBatchApproveRequest request) {
         DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBatchNo(batchNo)
                 .orElseThrow(() -> new BusinessException(404, "dispatch batch not found"));
+        if (!DispatchConstants.BATCH_STATUS_PENDING.equals(batch.getStatus())) {
+            throw new BusinessException(409, "only pending dispatch batches can be approved");
+        }
         batch.setStatus(DispatchConstants.BATCH_STATUS_APPROVED);
         batch.setApprovedBy(request.getApprovedBy());
         batch.setApprovedAt(LocalDateTime.now());
@@ -220,6 +252,12 @@ public class DispatchServiceImpl implements DispatchService {
 
         DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getBagNo())
                 .orElseThrow(() -> new BusinessException(404, "dispatch bag not found"));
+        if (!currentFacilityCode.equalsIgnoreCase(bag.getOriginFacilityCode())) {
+            throw new BusinessException(403, "current facility does not own this dispatch bag");
+        }
+        if (!java.util.Objects.equals(request.getToFacilityCode(), bag.getDestinationFacilityCode())) {
+            throw new BusinessException(400, "handoff destination must match the bag destination");
+        }
         if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(bag.getStatus())
                 || dispatchRepository.findHandoffRecordByBagNo(bag.getBagNo()).isPresent()) {
             throw new BusinessException(409, "dispatch bag has already been handed off");
@@ -249,7 +287,12 @@ public class DispatchServiceImpl implements DispatchService {
         entity.setStatus(DispatchConstants.HANDAOFF_STATUS_COMPLETED);
         entity = dispatchRepository.saveHandoffRecord(entity);
 
-        batch.setStatus(DispatchConstants.BATCH_STATUS_HANDED_OFF);
+        List<String> batchBagNos = getBatchBagNos(batch);
+        boolean allBagsHandedOff = batchBagNos.stream()
+                .allMatch(bagNo -> dispatchRepository.findHandoffRecordByBagNo(bagNo).isPresent());
+        batch.setStatus(allBagsHandedOff
+                ? DispatchConstants.BATCH_STATUS_HANDED_OFF
+                : DispatchConstants.BATCH_STATUS_APPROVED);
         batch.setUpdatedAt(LocalDateTime.now());
         dispatchRepository.updateDispatchBatch(batch);
 
@@ -257,8 +300,17 @@ public class DispatchServiceImpl implements DispatchService {
         bag.setUpdatedAt(LocalDateTime.now());
         dispatchRepository.updateDispatchBag(bag);
 
-        syncManifestToSorting(bag.getBagNo(), bag.getRouteCode(), bag.getTotalWeightGrams(),
-                bag.getOriginFacilityCode(), request.getToFacilityCode(), bag.getMailNoListAsList());
+        List<DispatchBagEntity> batchBags = batchBagNos.stream()
+                .map(bagNo -> dispatchRepository.findDispatchBagByBagNo(bagNo).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (batchBags.size() != batchBagNos.size() || batchBags.stream().anyMatch(item ->
+                !currentFacilityCode.equalsIgnoreCase(item.getOriginFacilityCode())
+                        || !java.util.Objects.equals(request.getToFacilityCode(), item.getDestinationFacilityCode()))) {
+            throw new BusinessException(409, "all bags in a batch must be handed off together along their planned route");
+        }
+        syncManifestToSorting("M" + batch.getBatchNo(), batch.getRouteCode(), bag.getOriginFacilityCode(),
+                request.getToFacilityCode(), batchBags);
 
         return toHandoffResponse(entity);
     }
@@ -266,17 +318,41 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public Boolean markManifestArrived(ManifestArrivedRequest request) {
-        if (request == null || request.getManifestCode() == null || request.getManifestCode().isBlank()) {
-            throw new BusinessException(400, "manifestCode cannot be blank");
+        if (request == null || request.getManifestCode() == null || request.getManifestCode().isBlank()
+                || request.getTotalPackageNo() == null || request.getTotalPackageNo().isBlank()) {
+            throw new BusinessException(400, "manifestCode and totalPackageNo cannot be blank");
         }
         DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getTotalPackageNo())
                 .orElse(null);
-        if (bag != null) {
-            bag.setStatus(DispatchConstants.BAG_STATUS_DISPATCHED);
-            bag.setUpdatedAt(LocalDateTime.now());
-            dispatchRepository.updateDispatchBag(bag);
+        if (bag == null) {
+            return Boolean.TRUE;
         }
+        DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo()).orElse(null);
+        if (batch == null) {
+            return Boolean.TRUE;
+        }
+        String expectedManifestCode = "M" + batch.getBatchNo();
+        if (!expectedManifestCode.equalsIgnoreCase(request.getManifestCode().trim())) {
+            throw new BusinessException(409, "manifest does not belong to the dispatch bag batch");
+        }
+        if (!getBatchBagNos(batch).stream().anyMatch(bag.getBagNo()::equalsIgnoreCase)) {
+            throw new BusinessException(409, "dispatch bag is not linked to its batch");
+        }
+        bag.setStatus(DispatchConstants.BAG_STATUS_ARRIVED);
+        bag.setUpdatedAt(LocalDateTime.now());
+        dispatchRepository.updateDispatchBag(bag);
         return Boolean.TRUE;
+    }
+
+    private List<String> getBatchBagNos(DispatchBatchEntity batch) {
+        if (batch == null) {
+            return List.of();
+        }
+        if (batch.getBagNos() != null && !batch.getBagNos().isEmpty()) {
+            return batch.getBagNos();
+        }
+        return batch.getBagNo() == null || batch.getBagNo().isBlank()
+                ? List.of() : List.of(batch.getBagNo());
     }
 
     @Override
@@ -307,35 +383,40 @@ public class DispatchServiceImpl implements DispatchService {
         return toBagResponse(dispatchRepository.updateDispatchBag(bag));
     }
 
-    private void syncManifestToSorting(String bagNo, String routeCode, Integer totalWeightGrams,
-                                       String sourceFacilityCode, String destinationFacilityCode, List<String> mailNos) {
+    private void syncManifestToSorting(String manifestNo, String routeCode,
+                                       String sourceFacilityCode, String destinationFacilityCode, List<DispatchBagEntity> bags) {
+        String bagNo = bags == null || bags.isEmpty() ? null : bags.get(0).getBagNo();
         SortingManifestClient client = sortingClientProvider.getIfAvailable();
         if (client == null) {
             log.warn("sorting manifest client unavailable, manifest sync skipped. bagNo={}", bagNo);
             return;
         }
         ManifestDTO request = new ManifestDTO();
-        request.setManifestCode(bagNo);
+        request.setManifestCode(manifestNo);
         request.setOriginNode(sourceFacilityCode);
         request.setTargetNode(destinationFacilityCode);
-        request.setTotalWeight(java.math.BigDecimal.valueOf(totalWeightGrams == null ? 0 : totalWeightGrams));
+        request.setTotalWeight(java.math.BigDecimal.valueOf(bags.stream()
+                .map(DispatchBagEntity::getTotalWeightGrams).filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue).sum()));
         List<TotalPackageDTO> packages = new java.util.ArrayList<>();
-        TotalPackageDTO totalPackage = new TotalPackageDTO();
-        totalPackage.setPackageNo(bagNo);
-        totalPackage.setPackageLevel("TRANSIT");
-        totalPackage.setRouteCode(routeCode);
-        totalPackage.setPackageWeight(java.math.BigDecimal.valueOf(totalWeightGrams == null ? 0 : totalWeightGrams));
-        List<TotalPackageDTO.ManifestItemDTO> items = new java.util.ArrayList<>();
-        for (String mailNo : mailNos) {
-            TotalPackageDTO.ManifestItemDTO item = new TotalPackageDTO.ManifestItemDTO();
-            item.setItemNo(mailNo);
-            item.setSeqNo(items.size() + 1);
-            item.setRouteCode(routeCode);
-            item.setWeight(java.math.BigDecimal.ONE);
-            items.add(item);
+        for (DispatchBagEntity bag : bags) {
+            TotalPackageDTO totalPackage = new TotalPackageDTO();
+            totalPackage.setPackageNo(bag.getBagNo());
+            totalPackage.setPackageLevel("TRANSIT");
+            totalPackage.setRouteCode(routeCode);
+            totalPackage.setPackageWeight(java.math.BigDecimal.valueOf(bag.getTotalWeightGrams() == null ? 0 : bag.getTotalWeightGrams()));
+            List<TotalPackageDTO.ManifestItemDTO> items = new java.util.ArrayList<>();
+            for (String mailNo : bag.getMailNoListAsList() == null ? List.<String>of() : bag.getMailNoListAsList()) {
+                TotalPackageDTO.ManifestItemDTO item = new TotalPackageDTO.ManifestItemDTO();
+                item.setItemNo(mailNo);
+                item.setSeqNo(items.size() + 1);
+                item.setRouteCode(routeCode);
+                item.setWeight(java.math.BigDecimal.ONE);
+                items.add(item);
+            }
+            totalPackage.setItems(items);
+            packages.add(totalPackage);
         }
-        totalPackage.setItems(items);
-        packages.add(totalPackage);
         request.setTotalPackages(packages);
         try {
             Result<Boolean> result = client.syncManifest(request);
@@ -372,18 +453,17 @@ public class DispatchServiceImpl implements DispatchService {
         }
     }
 
-    private void createDispatchBatchAuto(DispatchBagEntity bag) {
+    private DispatchBatchEntity createDispatchBatchAuto(DispatchBagEntity bag) {
         if (bag == null || bag.getBagNo() == null || bag.getBagNo().isBlank()) {
-            return;
+            throw new BusinessException(400, "dispatch bag is required");
         }
-        if (dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo()).isPresent()) {
-            return;
-        }
+        DispatchBatchEntity existing = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo()).orElse(null);
+        if (existing != null) return existing;
         DispatchBatchEntity batch = new DispatchBatchEntity();
         batch.setBagNo(bag.getBagNo());
         batch.setRouteCode(bag.getRouteCode());
         batch.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
-        dispatchRepository.saveDispatchBatch(batch);
+        return dispatchRepository.saveDispatchBatch(batch);
     }
 
     @Override
@@ -646,8 +726,9 @@ public class DispatchServiceImpl implements DispatchService {
         if (entity == null) {
             return null;
         }
-        if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(entity.getStatus())) {
-            return DispatchConstants.BAG_STATUS_DISPATCHED;
+        if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(entity.getStatus())
+                || DispatchConstants.BAG_STATUS_ARRIVED.equals(entity.getStatus())) {
+            return entity.getStatus();
         }
         return dispatchRepository.findHandoffRecordByBagNo(entity.getBagNo()).isPresent()
                 ? DispatchConstants.BAG_STATUS_DISPATCHED
@@ -659,6 +740,7 @@ public class DispatchServiceImpl implements DispatchService {
         response.setId(entity.getId());
         response.setBatchNo(entity.getBatchNo());
         response.setBagNo(entity.getBagNo());
+        response.setBagNos(entity.getBagNos() == null ? List.of(entity.getBagNo()) : entity.getBagNos());
         response.setRouteCode(entity.getRouteCode());
         response.setStatus(entity.getStatus());
         response.setApprovedBy(entity.getApprovedBy());

@@ -1,5 +1,7 @@
 package com.liana.post.common.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * 通用 API 响应包装器
  * 
@@ -8,6 +10,8 @@ package com.liana.post.common.model;
  * 
  * @param <T> 数据载荷的泛型类型
  */
+// Preserve existing response metadata while accepting it in strict service clients.
+@JsonIgnoreProperties(value = {"success", "fail"}, allowGetters = true)
 public class Result<T> {
     
     /**

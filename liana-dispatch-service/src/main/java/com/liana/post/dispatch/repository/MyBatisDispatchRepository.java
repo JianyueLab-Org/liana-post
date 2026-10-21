@@ -9,10 +9,12 @@ import com.liana.post.dispatch.constant.DispatchConstants;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import com.liana.post.dispatch.mapper.DispatchBagMapper;
 import com.liana.post.dispatch.mapper.DispatchBatchMapper;
+import com.liana.post.dispatch.mapper.DispatchBatchBagMapper;
 import com.liana.post.dispatch.mapper.HandoffRecordMapper;
 import com.liana.post.dispatch.mapper.RouteRuleMapper;
 import com.liana.post.dispatch.model.entity.DispatchBagEntity;
 import com.liana.post.dispatch.model.entity.DispatchBatchEntity;
+import com.liana.post.dispatch.model.entity.DispatchBatchBagEntity;
 import com.liana.post.dispatch.model.entity.HandoffRecordEntity;
 import com.liana.post.dispatch.model.entity.RouteRuleEntity;
 import org.springframework.stereotype.Repository;
@@ -29,13 +31,15 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     private static final Set<String> ALLOWED_BATCH_STATUS = Set.of(
             DispatchConstants.BATCH_STATUS_PENDING,
             DispatchConstants.BATCH_STATUS_APPROVED,
-            DispatchConstants.BATCH_STATUS_HANDED_OFF
+            DispatchConstants.BATCH_STATUS_HANDED_OFF,
+            DispatchConstants.BATCH_STATUS_CANCELLED
     );
 
     private static final Set<String> ALLOWED_BAG_STATUS = Set.of(
             DispatchConstants.BAG_STATUS_CREATED,
             DispatchConstants.BAG_STATUS_REVIEWED,
-            DispatchConstants.BAG_STATUS_DISPATCHED
+            DispatchConstants.BAG_STATUS_DISPATCHED,
+            DispatchConstants.BAG_STATUS_ARRIVED
     );
 
     private static final Set<String> ALLOWED_HANDOFF_STATUS = Set.of(
@@ -46,13 +50,15 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     private final RouteRuleMapper routeRuleMapper;
     private final DispatchBagMapper dispatchBagMapper;
     private final DispatchBatchMapper dispatchBatchMapper;
+    private final DispatchBatchBagMapper dispatchBatchBagMapper;
     private final HandoffRecordMapper handoffRecordMapper;
     private final StringRedisTemplate redisTemplate;
 
-    public MyBatisDispatchRepository(RouteRuleMapper routeRuleMapper, DispatchBagMapper dispatchBagMapper, DispatchBatchMapper dispatchBatchMapper, HandoffRecordMapper handoffRecordMapper, StringRedisTemplate redisTemplate) {
+    public MyBatisDispatchRepository(RouteRuleMapper routeRuleMapper, DispatchBagMapper dispatchBagMapper, DispatchBatchMapper dispatchBatchMapper, DispatchBatchBagMapper dispatchBatchBagMapper, HandoffRecordMapper handoffRecordMapper, StringRedisTemplate redisTemplate) {
         this.routeRuleMapper = routeRuleMapper;
         this.dispatchBagMapper = dispatchBagMapper;
         this.dispatchBatchMapper = dispatchBatchMapper;
+        this.dispatchBatchBagMapper = dispatchBatchBagMapper;
         this.handoffRecordMapper = handoffRecordMapper;
         this.redisTemplate = redisTemplate;
     }
@@ -125,7 +131,56 @@ public class MyBatisDispatchRepository implements DispatchRepository {
         if (dispatchBatchMapper.insert(entity) <= 0) {
             throw new BusinessException(500, "failed to save dispatch batch");
         }
+        replaceBatchBags(entity.getBatchNo(), List.of(entity.getBagNo()));
+        entity.setBagNos(List.of(entity.getBagNo()));
         return entity;
+    }
+
+    @Override
+    @Transactional
+    public void replaceBatchBags(String batchNo, List<String> bagNos) {
+        String normalizedBatchNo = normalize(batchNo);
+        List<String> normalizedBagNos = bagNos == null ? List.of() : bagNos.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(this::normalize)
+                .distinct()
+                .toList();
+        if (normalizedBagNos.isEmpty()) {
+            throw new BusinessException(400, "batch must contain at least one bag");
+        }
+        List<String> previousBatchNos = dispatchBatchBagMapper.selectList(new LambdaQueryWrapper<DispatchBatchBagEntity>()
+                        .in(DispatchBatchBagEntity::getBagNo, normalizedBagNos))
+                .stream().map(DispatchBatchBagEntity::getBatchNo).distinct().toList();
+        dispatchBatchBagMapper.delete(new LambdaQueryWrapper<DispatchBatchBagEntity>()
+                .in(DispatchBatchBagEntity::getBagNo, normalizedBagNos));
+        for (String bagNo : normalizedBagNos) {
+            DispatchBatchBagEntity link = new DispatchBatchBagEntity();
+            link.setBatchNo(normalizedBatchNo);
+            link.setBagNo(bagNo);
+            link.setCreatedAt(LocalDateTime.now());
+            if (dispatchBatchBagMapper.insert(link) <= 0) {
+                throw new BusinessException(500, "failed to link bag to dispatch batch");
+            }
+        }
+        for (String previousBatchNo : previousBatchNos) {
+            if (!normalizedBatchNo.equalsIgnoreCase(previousBatchNo) && findBatchBagNos(previousBatchNo).isEmpty()) {
+                DispatchBatchEntity previous = dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>()
+                        .eq(DispatchBatchEntity::getBatchNo, previousBatchNo));
+                if (previous != null) {
+                    previous.setStatus(DispatchConstants.BATCH_STATUS_CANCELLED);
+                    stamp(previous);
+                    dispatchBatchMapper.updateById(previous);
+                }
+            }
+        }
+    }
+
+    @Override
+    public List<String> findBatchBagNos(String batchNo) {
+        return dispatchBatchBagMapper.selectList(new LambdaQueryWrapper<DispatchBatchBagEntity>()
+                        .eq(DispatchBatchBagEntity::getBatchNo, normalize(batchNo))
+                        .orderByAsc(DispatchBatchBagEntity::getId))
+                .stream().map(DispatchBatchBagEntity::getBagNo).toList();
     }
 
     @Override
@@ -234,12 +289,21 @@ public class MyBatisDispatchRepository implements DispatchRepository {
 
     @Override
     public Optional<DispatchBatchEntity> findDispatchBatchByBatchNo(String batchNo) {
-        return Optional.ofNullable(dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBatchNo, normalize(batchNo))));
+        DispatchBatchEntity batch = dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBatchNo, normalize(batchNo)));
+        if (batch != null) batch.setBagNos(findBatchBagNos(batch.getBatchNo()));
+        return Optional.ofNullable(batch);
     }
 
     @Override
     public Optional<DispatchBatchEntity> findDispatchBatchByBagNo(String bagNo) {
-        return Optional.ofNullable(dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBagNo, normalize(bagNo))));
+        String normalizedBagNo = normalize(bagNo);
+        DispatchBatchBagEntity link = dispatchBatchBagMapper.selectOne(new LambdaQueryWrapper<DispatchBatchBagEntity>()
+                .eq(DispatchBatchBagEntity::getBagNo, normalizedBagNo).last("LIMIT 1"));
+        DispatchBatchEntity batch = link == null
+                ? dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBagNo, normalizedBagNo))
+                : dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBatchNo, link.getBatchNo()));
+        if (batch != null) batch.setBagNos(findBatchBagNos(batch.getBatchNo()));
+        return Optional.ofNullable(batch);
     }
 
     @Override
@@ -262,7 +326,9 @@ public class MyBatisDispatchRepository implements DispatchRepository {
 
     @Override
     public List<DispatchBatchEntity> findAllDispatchBatches() {
-        return dispatchBatchMapper.selectList(null);
+        List<DispatchBatchEntity> batches = dispatchBatchMapper.selectList(null);
+        batches.forEach(batch -> batch.setBagNos(findBatchBagNos(batch.getBatchNo())));
+        return batches;
     }
 
     @Override

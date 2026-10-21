@@ -55,7 +55,8 @@ public class OmsController {
 
     @PostMapping("/mails")
     public Result<MailResponse> createMail(@Valid @RequestBody MailCreateRequest request) {
-        return Result.ok(omsService.createMail(request));
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                "请通过邮资收寄结算接口创建邮件：/api/postage/acceptances");
     }
 
     @GetMapping("/mails/{waybillNo}")

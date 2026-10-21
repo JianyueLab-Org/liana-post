@@ -94,6 +94,7 @@ CREATE TABLE `mail` (
   `bag_no` VARCHAR(32) DEFAULT NULL COMMENT 'mail bag id',
   `package_id` VARCHAR(32) DEFAULT NULL,
   `mail_type_code` VARCHAR(64) NOT NULL,
+  `additional_services` VARCHAR(512) NOT NULL DEFAULT '',
   `service_type` VARCHAR(32) DEFAULT NULL,
   `mail_scope` VARCHAR(32) NOT NULL DEFAULT 'DOMESTIC',
   `dest_country_code` VARCHAR(8) DEFAULT NULL,
