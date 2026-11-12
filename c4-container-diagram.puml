@@ -1,0 +1,44 @@
+@startuml LianaPostContainer
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_TOP_DOWN()
+title Liana Post - C4 Model Level 2 Container Diagram
+
+Person(user, "系统用户", "管理员、分拣员、调度员、投递员")
+
+System_Boundary(system, "太平洋岛国邮政物流分布式系统") {
+  Container(web, "liana-web", "Vue 3 / Vite", "统一业务工作台")
+  Container(gateway, "liana-gateway", "Spring Cloud Gateway", "统一入口、路由转发、JWT 鉴权")
+
+  Container(auth, "liana-auth-service", "Spring Boot + MySQL", "认证、用户、角色、权限")
+  Container(oms, "liana-oms-service", "Spring Boot + MySQL", "邮件收寄、台账、状态流转")
+  Container(sorting, "liana-sorting-service", "Spring Boot + MySQL", "接收、开拆、路由计算、格口封袋")
+  Container(dispatch, "liana-dispatch-service", "Spring Boot + MySQL", "总包、封发批次、路由规则、交接")
+  Container(tracking, "liana-tracking-service", "Spring Boot + MySQL", "轨迹事件记录与查询")
+  Container(transport, "liana-transport-service", "Spring Boot + MySQL", "运输资产、线路、班次、任务")
+  Container(facility, "liana-facility-service", "Spring Boot + MySQL", "邮局、转运中心、交换局主数据")
+  Container(syncer, "liana-syncer", "Spring Boot Scheduler + MySQL", "Outbox、同步任务、失败重试")
+}
+
+Rel(user, web, "使用", "Browser")
+Rel(web, gateway, "调用 API", "HTTP / JSON")
+
+Rel(gateway, auth, "路由")
+Rel(gateway, oms, "路由")
+Rel(gateway, sorting, "路由")
+Rel(gateway, dispatch, "路由")
+Rel(gateway, tracking, "路由")
+Rel(gateway, transport, "路由")
+Rel(gateway, facility, "路由")
+Rel(gateway, syncer, "路由")
+
+Rel(sorting, oms, "查询/更新邮件状态", "OpenFeign")
+Rel(sorting, dispatch, "封袋与路单联动", "OpenFeign")
+Rel(dispatch, oms, "查询待封发邮件", "OpenFeign")
+Rel(oms, dispatch, "邮件入包同步", "OpenFeign")
+Rel(oms, tracking, "记录邮件状态轨迹", "OpenFeign")
+Rel(dispatch, tracking, "记录封发/交接轨迹", "OpenFeign")
+Rel(transport, dispatch, "关联总包运输任务", "OpenFeign")
+Rel(transport, tracking, "记录运输轨迹", "OpenFeign")
+
+@enduml

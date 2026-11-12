@@ -7,6 +7,8 @@ public class SortingSecurityAuditResponse {
     private String itemNo;
     private String securityStatus;
     private String routeCode;
+    private String slotCode;
+    private String transportMode;
     private String nextHop;
     private String message;
     private String xrayImage;
@@ -25,6 +27,10 @@ public class SortingSecurityAuditResponse {
     public void setSecurityStatus(String securityStatus) { this.securityStatus = securityStatus; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
+    public String getSlotCode() { return slotCode; }
+    public void setSlotCode(String slotCode) { this.slotCode = slotCode; }
+    public String getTransportMode() { return transportMode; }
+    public void setTransportMode(String transportMode) { this.transportMode = transportMode; }
     public String getNextHop() { return nextHop; }
     public void setNextHop(String nextHop) { this.nextHop = nextHop; }
     public String getMessage() { return message; }

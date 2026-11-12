@@ -1,0 +1,98 @@
+@startuml ReportLocalTransportTrackingFacilityClassDiagram
+title 局部类图：运输、轨迹与设施
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "Transport" {
+  class TransportTaskEntity {
+    Long id
+    String taskCode
+    Long dispatchBagId
+    Long assetId
+    Long routeId
+    Long scheduleId
+    String status
+  }
+
+  class TransportAssetEntity {
+    Long id
+    String code
+    String name
+    String type
+    String status
+  }
+
+  class TransportRouteEntity {
+    Long id
+    String routeCode
+    String originFacilityId
+    String destinationFacilityId
+    String transportType
+    String status
+  }
+
+  class TransportScheduleEntity {
+    Long id
+    String scheduleCode
+    Long routeId
+    LocalDateTime departureTime
+    LocalDateTime arrivalTime
+    String status
+  }
+}
+
+package "Tracking" {
+  class TrackingEventEntity {
+    Long id
+    String eventNo
+    String waybillNo
+    String eventType
+    LocalDateTime eventTime
+    String facilityCode
+    Long operatorId
+    String sourceService
+  }
+}
+
+package "Facility" {
+  class FacilityEntity {
+    Long id
+    String facilityCode
+    String name
+    String typeCode
+    String parentFacilityCode
+    String countryCode
+    Integer status
+  }
+
+  class FacilityTypeEntity {
+    Long id
+    String code
+    String name
+  }
+
+  class FacilityRouteEntity {
+    Long id
+    String routeCode
+    String originFacilityCode
+    String destinationFacilityCode
+    String transportMode
+    Integer status
+  }
+}
+
+TransportTaskEntity --> TransportAssetEntity : assetId
+TransportTaskEntity --> TransportRouteEntity : routeId
+TransportTaskEntity --> TransportScheduleEntity : scheduleId
+TransportScheduleEntity --> TransportRouteEntity : routeId
+TransportRouteEntity --> FacilityEntity : origin/destination id
+
+TrackingEventEntity --> FacilityEntity : facilityCode
+FacilityEntity --> FacilityTypeEntity : typeCode
+FacilityRouteEntity --> FacilityEntity : origin/destination code
+
+@enduml

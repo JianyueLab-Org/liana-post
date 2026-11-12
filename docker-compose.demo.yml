@@ -1,0 +1,271 @@
+x-backend-common: &backend-common
+  image: liana-post/${SERVICE_NAME:-backend}:demo
+  restart: unless-stopped
+  environment: &backend-env
+    NACOS_SERVER_ADDR: nacos:8848
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    REDIS_DB: 0
+    SENTINEL_DASHBOARD: sentinel-dashboard:8858
+    SPRING_SQL_INIT_MODE: never
+    DB_USERNAME: root
+    DB_PASSWORD: liana_demo
+    JAVA_OPTS: -XX:MaxRAMPercentage=75.0
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    nacos:
+      condition: service_started
+    sentinel-dashboard:
+      condition: service_started
+
+services:
+  sentinel-dashboard:
+    image: eclipse-temurin:17-jre
+    container_name: liana-demo-sentinel-dashboard
+    restart: unless-stopped
+    command:
+      - java
+      - -Dserver.port=8858
+      - -Dsentinel.dashboard.auth.username=${SENTINEL_USERNAME:-sentinel}
+      - -Dsentinel.dashboard.auth.password=${SENTINEL_PASSWORD:-sentinel}
+      - -jar
+      - /opt/sentinel/sentinel-dashboard-1.8.9.jar
+    ports:
+      - "8858:8858"
+    volumes:
+      - ${SENTINEL_HOME:-D:/sentinel}:/opt/sentinel:ro
+
+  mysql:
+    image: mysql:8.0
+    container_name: liana-demo-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: liana_demo
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./script/demo-mysql-init.sh:/docker-entrypoint-initdb.d/00-demo-mysql-init.sh:ro
+      - ./db:/demo-db:ro
+      - ./db_revise:/demo-db-revise:ro
+      - ./liana-postage-service/src/main/resources/schema.sql:/demo-postage-schema.sql:ro
+      - ./liana-postage-service/src/main/resources/retail-schema.sql:/demo-postage-retail-schema.sql:ro
+      - ./liana-postage-service/src/main/resources/acceptance-schema.sql:/demo-postage-acceptance-schema.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: liana-demo-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+      JVM_XMN: 128m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+
+  redis:
+    image: redis:7.2
+    container_name: liana-demo-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  liana-gateway:
+    <<: *backend-common
+    image: liana-post/liana-gateway:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-gateway
+    environment:
+      <<: *backend-env
+      TRANSPORT_ROUTE_URI: http://liana-transport-service:8086
+      SENTINEL_GATEWAY_ROUTE_ID: tracking-alias
+      SENTINEL_GATEWAY_QPS: 2
+    ports:
+      - "8080:8080"
+
+  liana-auth-service:
+    <<: *backend-common
+    image: liana-post/liana-auth-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-auth-service
+    environment:
+      <<: *backend-env
+      AUTH_DB_URL: jdbc:mysql://mysql:3306/auth_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      AUTH_DB_USERNAME: root
+      AUTH_DB_PASSWORD: liana_demo
+
+  liana-oms-service:
+    <<: *backend-common
+    image: liana-post/liana-oms-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-oms-service
+    environment:
+      <<: *backend-env
+      OMS_DB_URL: jdbc:mysql://mysql:3306/oms_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      OMS_DB_USERNAME: root
+      OMS_DB_PASSWORD: liana_demo
+
+  liana-dispatch-service:
+    <<: *backend-common
+    image: liana-post/liana-dispatch-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-dispatch-service
+    environment:
+      <<: *backend-env
+      DISPATCH_DB_URL: jdbc:mysql://mysql:3306/dispatch_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      DISPATCH_DB_USERNAME: root
+      DISPATCH_DB_PASSWORD: liana_demo
+      SORTING_SERVICE_URL: http://liana-sorting-service:8087
+
+  liana-sorting-service:
+    <<: *backend-common
+    image: liana-post/liana-sorting-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-sorting-service
+    environment:
+      <<: *backend-env
+      SORTING_DB_URL: jdbc:mysql://mysql:3306/sorting_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SORTING_DB_USERNAME: root
+      SORTING_DB_PASSWORD: liana_demo
+      SORTING_XRAY_ROOT: /opt/liana/x-ray
+    volumes:
+      - ./x-ray:/opt/liana/x-ray:ro
+
+  liana-tracking-service:
+    # Do not set container_name or host ports here. This service is intended
+    # to be scaled in demos with:
+    # docker compose -f docker-compose.demo.yml up -d --scale liana-tracking-service=3 liana-tracking-service
+    <<: *backend-common
+    image: liana-post/liana-tracking-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-tracking-service
+    environment:
+      <<: *backend-env
+      TRACKING_DB_URL: jdbc:mysql://mysql:3306/tracking_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      TRACKING_DB_USERNAME: root
+      TRACKING_DB_PASSWORD: liana_demo
+
+  liana-facility-service:
+    <<: *backend-common
+    image: liana-post/liana-facility-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-facility-service
+    environment:
+      <<: *backend-env
+      FACILITY_DB_URL: jdbc:mysql://mysql:3306/facility_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      FACILITY_DB_USERNAME: root
+      FACILITY_DB_PASSWORD: liana_demo
+
+  liana-transport-service:
+    <<: *backend-common
+    image: liana-post/liana-transport-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-transport-service
+    environment:
+      <<: *backend-env
+      TRANSPORT_DB_URL: jdbc:mysql://mysql:3306/transport_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      TRANSPORT_DB_USERNAME: root
+      TRANSPORT_DB_PASSWORD: liana_demo
+
+  liana-syncer:
+    <<: *backend-common
+    image: liana-post/liana-syncer:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-syncer
+    environment:
+      <<: *backend-env
+      SYNCER_DB_URL: jdbc:mysql://mysql:3306/syncer_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SYNCER_DB_USERNAME: root
+      SYNCER_DB_PASSWORD: liana_demo
+    ports:
+      - "8089:8089"
+
+  postage-db-init:
+    image: mysql:8.0
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: liana_demo
+    command:
+      - sh
+      - -c
+      - mysql --host=mysql --user=root --default-character-set=utf8mb4 < /demo-db/postage_db.sql
+    volumes:
+      - ./db/postage_db.sql:/demo-db/postage_db.sql:ro
+      - ./liana-postage-service/src/main/resources/schema.sql:/demo-postage-schema.sql:ro
+      - ./liana-postage-service/src/main/resources/retail-schema.sql:/demo-postage-retail-schema.sql:ro
+      - ./liana-postage-service/src/main/resources/acceptance-schema.sql:/demo-postage-acceptance-schema.sql:ro
+
+  liana-postage-service:
+    <<: *backend-common
+    image: liana-post/liana-postage-service:demo
+    build:
+      context: .
+      args:
+        MODULE: liana-postage-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_started
+      postage-db-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *backend-env
+      POSTAGE_DB_URL: jdbc:mysql://mysql:3306/postage_db?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      POSTAGE_DB_USERNAME: root
+      POSTAGE_DB_PASSWORD: liana_demo
+      POSTAGE_SQL_INIT_MODE: never
+      # Import only into an empty tariff catalog; existing administrator changes are preserved.
+      POSTAGE_SEED_INITIAL_TARIFF: ${POSTAGE_SEED_INITIAL_TARIFF:-true}
+
+  liana-web:
+    image: liana-post/liana-web:demo
+    build:
+      context: ./liana-web
+    container_name: liana-demo-web
+    restart: unless-stopped
+    depends_on:
+      - liana-gateway
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:
+  redis_data:

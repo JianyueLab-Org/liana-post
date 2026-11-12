@@ -1,0 +1,9 @@
+.git
+.idea
+**/target
+**/node_modules
+**/dist
+data
+x-ray
+*.log
+hs_err_pid*.log

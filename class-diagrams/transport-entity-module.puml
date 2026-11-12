@@ -1,0 +1,87 @@
+@startuml TransportEntityModule
+allowmixing
+title 运输调度模块核心实体关系图
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.5
+
+skinparam package {
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 16
+}
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #263238
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #F1F8E9
+  BorderColor #689F38
+  FontColor #263238
+  FontSize 14
+}
+
+package "运输调度模块\nliana-transport-service" as transport {
+  class "TransportTaskEntity\n运输任务" as TransportTaskEntity {
+    taskCode
+    dispatchBagId
+    routeId
+    scheduleId
+    assetId
+    status
+    departureTime
+    arrivalTime
+  }
+
+  class "TransportAssetEntity\n运输资源" as TransportAssetEntity {
+    assetCode
+    transportMode
+    status
+  }
+
+  class "TransportRouteEntity\n运输线路" as TransportRouteEntity {
+    routeCode
+    originFacilityCode
+    destFacilityCode
+    transportMode
+    status
+  }
+
+  class "TransportScheduleEntity\n班次计划" as TransportScheduleEntity {
+    scheduleCode
+    routeCode
+    status
+  }
+}
+
+component "封发服务\nDispatch Service" as dispatch
+component "设施服务\nFacility Service" as facility
+component "轨迹服务\nTracking Service" as tracking
+
+TransportRouteEntity "1" -- "0..*" TransportScheduleEntity : routeCode
+TransportRouteEntity "1" -- "0..*" TransportTaskEntity : routeId
+TransportScheduleEntity "1" -- "0..*" TransportTaskEntity : scheduleId
+TransportAssetEntity "1" -- "0..*" TransportTaskEntity : assetId
+
+dispatch --> transport : 提供或关联总包信息
+facility --> transport : 提供网点与节点数据
+transport --> tracking : 写入运输状态事件
+
+note bottom of TransportTaskEntity
+将总包与运输线路、班次和
+运输资源关联，表达一次运输执行。
+end note
+
+@enduml

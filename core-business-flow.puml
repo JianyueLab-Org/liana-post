@@ -1,0 +1,44 @@
+@startuml LianaPostCoreBusinessFlow
+title Liana Post 核心业务流程图
+
+start
+
+:用户登录;
+:Gateway 鉴权并转发请求;
+:Auth 服务校验账号并签发 JWT;
+
+:创建邮件;
+:OMS 生成运单号并保存邮件台账;
+:Tracking 记录收寄轨迹;
+
+:分拣中心接收邮件/总包;
+:Sorting 开拆核对;
+:Sorting 扫描邮件并计算路由;
+
+if (是否命中正常路由?) then (是)
+  :邮件落入目标格口;
+  :按格口封袋;
+else (否)
+  :进入异常复核;
+  :人工确认路由或退回处理;
+endif
+
+:Dispatch 创建总包;
+:Dispatch 创建封发批次;
+:Dispatch 完成交接确认;
+:Tracking 记录封发轨迹;
+
+:Transport 创建运输任务;
+:运输启运/在途/到达;
+:Tracking 记录运输轨迹;
+
+:目的网点到达处理;
+:OMS 更新邮件当前位置与状态;
+:末端投递并确认妥投;
+:Tracking 记录投递轨迹;
+
+:用户/客服按运单号查询轨迹;
+:Tracking 返回全生命周期事件时间线;
+
+stop
+@enduml

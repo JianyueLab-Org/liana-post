@@ -1,0 +1,116 @@
+@startuml LianaPostLayeredArchitecture
+title Liana Post 分布式邮政物流系统逻辑架构图
+
+top to bottom direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 12
+skinparam nodesep 45
+skinparam ranksep 35
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.6
+
+skinparam rectangle {
+  BorderColor #263238
+  FontColor #263238
+  FontSize 15
+}
+
+skinparam package {
+  BorderColor #263238
+  FontColor #263238
+  FontSize 17
+}
+
+skinparam database {
+  BorderColor #263238
+  FontColor #263238
+  FontSize 14
+}
+
+rectangle "前端层 · Vue 3 / Vite" as frontend_layer #F9DADA {
+  rectangle "liana-web\n管理工作台" as web #F9EAEA
+  rectangle "页面路由\nVue Router" as router #F9EAEA
+  rectangle "状态管理\nPinia" as pinia #F9EAEA
+  rectangle "API 封装\nAxios" as axios #F9EAEA
+}
+
+rectangle "接入层 · Spring Cloud Gateway" as gateway_layer #FBEAD7 {
+  rectangle "liana-gateway\n统一入口" as gateway #FFF2E1
+  rectangle "JWT 鉴权\n白名单 / Token 校验" as auth_filter #FFF2E1
+  rectangle "服务路由\n/liana-*-service/**" as gateway_route #FFF2E1
+}
+
+rectangle "业务应用层 · Spring Boot 微服务" as biz_layer #E3F4D8 {
+  rectangle "认证权限\nliana-auth-service" as auth_service #EDF9E6
+  rectangle "订单邮件\nliana-oms-service" as oms_service #EDF9E6
+  rectangle "分拣处理\nliana-sorting-service" as sorting_service #EDF9E6
+  rectangle "封发调度\nliana-dispatch-service" as dispatch_service #EDF9E6
+  rectangle "运输管理\nliana-transport-service" as transport_service #EDF9E6
+  rectangle "轨迹查询\nliana-tracking-service" as tracking_service #EDF9E6
+  rectangle "机构资料\nliana-facility-service" as facility_service #EDF9E6
+  rectangle "同步补偿\nliana-syncer" as syncer_service #EDF9E6
+}
+
+rectangle "服务支撑层" as support_layer #E9F7DD {
+  rectangle "公共组件\nliana-common" as common #F6FCF1
+  rectangle "OpenFeign\n服务间调用" as feign #F6FCF1
+  rectangle "MyBatis Plus\n数据访问" as mybatis #F6FCF1
+  rectangle "Sentinel\n限流熔断" as sentinel #F6FCF1
+}
+
+rectangle "数据与中间件层" as data_layer #DFF7F8 {
+  database "MySQL 8.0\n业务库分库" as mysql #EAFBFC
+  database "Redis 7.2\n缓存" as redis #EAFBFC
+  rectangle "Nacos\n注册中心 / 配置中心" as nacos #EAFBFC
+  rectangle "X-Ray 文件资源\n分拣安检样例" as xray #EAFBFC
+}
+
+rectangle "基础设施层" as infra_layer #EAF0FF {
+  rectangle "Docker Compose\n演示环境编排" as compose #F2F6FF
+  rectangle "Nginx\n前端静态资源" as nginx #F2F6FF
+  rectangle "Maven 多模块\n统一构建" as maven #F2F6FF
+}
+
+web -[hidden]right- router
+router -[hidden]right- pinia
+pinia -[hidden]right- axios
+
+gateway -[hidden]right- auth_filter
+auth_filter -[hidden]right- gateway_route
+
+auth_service -[hidden]right- oms_service
+oms_service -[hidden]right- sorting_service
+sorting_service -[hidden]right- dispatch_service
+transport_service -[hidden]right- tracking_service
+tracking_service -[hidden]right- facility_service
+facility_service -[hidden]right- syncer_service
+
+common -[hidden]right- feign
+feign -[hidden]right- mybatis
+mybatis -[hidden]right- sentinel
+
+mysql -[hidden]right- redis
+redis -[hidden]right- nacos
+nacos -[hidden]right- xray
+
+compose -[hidden]right- nginx
+nginx -[hidden]right- maven
+
+frontend_layer -[hidden]down- gateway_layer
+gateway_layer -[hidden]down- biz_layer
+biz_layer -[hidden]down- support_layer
+support_layer -[hidden]down- data_layer
+data_layer -[hidden]down- infra_layer
+
+frontend_layer --> gateway_layer : HTTPS + JWT Token
+gateway_layer --> biz_layer : 统一鉴权 / 路由转发
+biz_layer --> support_layer : 公共组件 / Feign / MyBatis / Sentinel
+support_layer --> data_layer : 注册配置 / 缓存 / 数据访问
+data_layer ..> infra_layer : 容器化运行支撑
+
+@enduml

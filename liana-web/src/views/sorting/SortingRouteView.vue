@@ -13,7 +13,7 @@
         <input
           ref="scanInputRef"
           class="input text-lg font-semibold tracking-[0.12em]"
-          :value="queueHead?.itemNo || ''"
+          :value="selectedItem?.itemNo || ''"
           placeholder="待路由队列为空"
           readonly
           autofocus
@@ -22,8 +22,8 @@
       </div>
 
       <div class="mt-4 flex flex-wrap gap-2">
-        <button class="btn btn-primary" :disabled="loading || !queue.length" @click="submitHead">
-          {{ loading ? '处理中...' : '处理队首' }}
+        <button class="btn btn-primary" :disabled="loading || !selectedItem" @click="submitHead(false)">
+          {{ loading ? '处理中...' : '处理选中邮件' }}
         </button>
         <button class="btn btn-secondary" :disabled="loading" @click="refreshPending">刷新队列</button>
       </div>
@@ -38,7 +38,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in queue" :key="item.itemNo">
+            <tr v-for="item in queue" :key="item.itemNo" class="cursor-pointer" :class="selectedItemNo === item.itemNo ? 'bg-blue-50' : ''" @click="selectedItemNo = item.itemNo">
               <td class="font-medium text-gray-900">{{ item.itemNo }}</td>
               <td>{{ scopeText(item) }}</td>
               <td>{{ formatTime(item.unpackedAt) }}</td>
@@ -48,6 +48,14 @@
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="isAdmin && selectedItem" class="mt-4 space-y-2 rounded-lg border border-amber-200 p-3">
+        <div class="text-sm font-semibold">管理员人工指定下一跳</div>
+        <select v-model="manualNextHopCode" class="select">
+          <option value="">请选择当前机构的启用封发关系</option>
+          <option v-for="route in availableRoutes" :key="route.routeCode" :value="route.destinationFacilityCode">{{ route.routeCode }} → {{ route.destinationFacilityCode }}</option>
+        </select>
+        <button class="btn btn-secondary" :disabled="loading || !manualNextHopCode" @click="submitHead(true)">按所选邮路处理</button>
       </div>
     </section>
 
@@ -78,7 +86,9 @@
           <div class="space-y-4">
             <div class="rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
               <div>邮件单号：<span class="font-semibold text-gray-900">{{ latest?.itemNo || '-' }}</span></div>
-              <div class="mt-2">路由格口：<span class="font-semibold text-gray-900">{{ latest?.routeCode || '-' }}</span></div>
+              <div class="mt-2">封发邮路：<span class="font-semibold text-gray-900">{{ latest?.routeCode || '-' }}</span></div>
+              <div class="mt-2">运输方式：<span class="font-semibold text-gray-900">{{ latest?.transportMode || '-' }}</span></div>
+              <div class="mt-2">临时格口：<span class="font-semibold text-gray-900">{{ latest?.slotCode || '-' }}</span></div>
               <div class="mt-2">邮件类型：<span class="font-semibold text-gray-900">{{ latestScopeText }}</span></div>
               <div class="mt-2">原寄局：<span class="font-semibold text-gray-900">{{ latest?.originFacilityCode || '-' }}</span></div>
               <div class="mt-2">样本图：<span class="font-semibold text-gray-900">{{ latest?.sourceImageName || '-' }}</span></div>
@@ -127,8 +137,8 @@
                 <td>{{ row.routeCode }}</td>
                 <td>{{ row.nextHop }}</td>
                 <td>
-                  <span class="rounded-full px-2 py-1 text-xs font-medium" :class="row.securityStatus === 'DANGER' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'">
-                    {{ row.securityStatus }}
+                  <span class="rounded-full px-2 py-1 text-xs font-medium" :class="row.securityStatus === 'DANGER' ? 'bg-red-100 text-red-700' : row.securityStatus === 'MANUAL_REVIEW' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'">
+                    {{ row.securityStatus === 'MANUAL_REVIEW' ? '待管理员处理' : row.securityStatus === 'DANGER' ? '拦截' : '通过' }}
                   </span>
                 </td>
               </tr>
@@ -145,12 +155,15 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { sortingApi } from '../../lib/api';
+import { sortingApi, facilityApi } from '../../lib/api';
 import { useSessionStore } from '../../stores/session';
 
 const session = useSessionStore();
 const scanInputRef = ref(null);
 const queue = ref([]);
+const selectedItemNo = ref('');
+const manualNextHopCode = ref('');
+const routes = ref([]);
 const rows = ref([]);
 const loading = ref(false);
 const historyLoading = ref(false);
@@ -160,12 +173,14 @@ const auditMessage = ref('等待队列处理');
 let routeScanSequence = 0;
 
 const stationCode = computed(() => session.user?.facilityCode || '');
-const queueHead = computed(() => queue.value[0] || null);
+const selectedItem = computed(() => queue.value.find(item => item.itemNo === selectedItemNo.value) || queue.value[0] || null);
+const isAdmin = computed(() => session.user?.role === 'ADMIN');
+const availableRoutes = computed(() => routes.value.filter(route => Number(route.status) === 1 && route.originFacilityCode?.toUpperCase() === stationCode.value.toUpperCase()));
 const detectedLabels = computed(() => latest.value?.detectedLabels || []);
 const dangerLabels = computed(() => latest.value?.dangerLabels || []);
-const auditStateText = computed(() => (auditState.value === 'DANGER' ? '拦截' : '通过'));
-const auditBadgeClass = computed(() => (auditState.value === 'DANGER' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'));
-const auditTextClass = computed(() => (auditState.value === 'DANGER' ? 'text-red-700' : 'text-emerald-700'));
+const auditStateText = computed(() => auditState.value === 'DANGER' ? '拦截' : auditState.value === 'MANUAL_REVIEW' ? '待管理员处理' : '通过');
+const auditBadgeClass = computed(() => auditState.value === 'DANGER' ? 'bg-red-600 text-white' : auditState.value === 'MANUAL_REVIEW' ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white');
+const auditTextClass = computed(() => auditState.value === 'DANGER' ? 'text-red-700' : auditState.value === 'MANUAL_REVIEW' ? 'text-amber-700' : 'text-emerald-700');
 const latestScopeText = computed(() => {
   if (!latest.value) return '-';
   return `${latest.value.mailScope || '-'} / ${latest.value.serviceType || '-'}`;
@@ -197,14 +212,14 @@ function parseExt(ext) {
   }
 }
 
-async function submitHead() {
-  if (!queueHead.value || loading.value) {
+async function submitHead(manual = false) {
+  if (!selectedItem.value || loading.value) {
     auditMessage.value = '暂无待路由邮件';
     focusScan();
     return;
   }
   loading.value = true;
-  const itemNo = queueHead.value.itemNo;
+  const itemNo = selectedItem.value.itemNo;
   try {
     const payload = await sortingApi.routeCalculateScan({
       stationCode: stationCode.value,
@@ -212,6 +227,7 @@ async function submitHead() {
       operatorId: session.user?.userId || null,
       deviceId: 'AUTO-ROUTE-XRAY',
       idempotencyKey: `route-xray-${Date.now()}-${++routeScanSequence}`,
+      manualNextHopCode: manual ? manualNextHopCode.value : null,
     }, session.token);
     latest.value = payload;
     auditState.value = payload.securityStatus || 'PASS';
@@ -235,6 +251,7 @@ async function submitHead() {
 
 async function refreshPending() {
   queue.value = await sortingApi.listPendingRouteItems(stationCode.value, session.token);
+  if (!queue.value.some(item => item.itemNo === selectedItemNo.value)) selectedItemNo.value = queue.value[0]?.itemNo || '';
   focusScan();
 }
 
@@ -251,7 +268,7 @@ async function refreshHistory() {
         const ext = parseExt(row.ext);
         return {
           itemNo: row.itemNo,
-          routeCode: row.toPackageNo || row.targetCenterCode || '-',
+          routeCode: ext.routeCode || row.toPackageNo || row.targetCenterCode || '-',
           nextHop: ext.nextHop || row.targetCenterCode || row.toPackageNo || '-',
           securityStatus: ext.securityStatus || (String(row.ext || '').includes('DANGER') ? 'DANGER' : 'PASS'),
           eventTime: row.eventTime,
@@ -263,7 +280,7 @@ async function refreshHistory() {
 }
 
 onMounted(async () => {
-  await Promise.all([refreshPending(), refreshHistory()]);
+  await Promise.all([refreshPending(), refreshHistory(), ...(isAdmin.value ? [facilityApi.listRoutes(session.token).then(value => { routes.value = value || []; })] : [])]);
   focusScan();
 });
 </script>

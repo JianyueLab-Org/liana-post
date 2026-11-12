@@ -10,6 +10,7 @@ public class SortingRouteScanRequest {
     private String operatorId;
     private String deviceId;
     private String idempotencyKey;
+    private String manualNextHopCode;
 
     public String getStationCode() { return stationCode; }
     public void setStationCode(String stationCode) { this.stationCode = stationCode; }
@@ -21,4 +22,6 @@ public class SortingRouteScanRequest {
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+    public String getManualNextHopCode() { return manualNextHopCode; }
+    public void setManualNextHopCode(String manualNextHopCode) { this.manualNextHopCode = manualNextHopCode; }
 }

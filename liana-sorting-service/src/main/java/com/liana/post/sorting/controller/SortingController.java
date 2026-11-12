@@ -3,6 +3,8 @@ package com.liana.post.sorting.controller;
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.sorting.ManifestDTO;
 import com.liana.post.common.model.Result;
+import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.sorting.model.dto.*;
 import com.liana.post.sorting.service.SortingService;
 import jakarta.validation.Valid;
@@ -47,7 +49,14 @@ public class SortingController {
     }
 
     @PostMapping("/route-calculate/scan")
-    public Result<SortingSecurityAuditResponse> routeCalculateByScan(@Valid @RequestBody SortingRouteScanRequest request) {
+    public Result<SortingSecurityAuditResponse> routeCalculateByScan(@Valid @RequestBody SortingRouteScanRequest request,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        if (request.getManualNextHopCode() != null && !request.getManualNextHopCode().isBlank()) {
+            String token = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
+            if (!JwtTokenUtil.validateToken(token) || !"ADMIN".equalsIgnoreCase(JwtTokenUtil.getRoleFromToken(token))) {
+                throw new BusinessException(403, "administrator required");
+            }
+        }
         return Result.ok(sortingService.routeCalculate(request));
     }
 

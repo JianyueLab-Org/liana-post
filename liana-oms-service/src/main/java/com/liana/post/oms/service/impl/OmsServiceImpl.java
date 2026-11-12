@@ -580,6 +580,7 @@ public class OmsServiceImpl implements OmsService {
         response.setDeclaredValue(mail.getDeclaredValue());
         response.setSenderFullName(loadSenderName(mail.getSenderId()));
         response.setRecipientFullName(loadRecipientName(mail.getRecipientId()));
+        response.setRecipientPostcode(omsRepository.findRecipientById(mail.getRecipientId()).map(RecipientEntity::getPostcode).orElse(null));
         return response;
     }
 

@@ -1,0 +1,73 @@
+@startuml CommonSupportModule
+allowmixing
+title 公共支撑模块核心类关系图
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.5
+
+skinparam package {
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 16
+}
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #263238
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #F1F8E9
+  BorderColor #689F38
+  FontColor #263238
+  FontSize 14
+}
+
+package "公共支撑模块\nliana-common" as common {
+  class "Result<T>\n统一响应结构" as Result {
+    code
+    message
+    data
+  }
+
+  class "BusinessException\n业务异常" as BusinessException {
+    code
+    message
+  }
+
+  class "JwtTokenUtil\nJWT 工具" as JwtTokenUtil
+  class "UpuBarcodeUtil\nUPU 风格运单号生成" as UpuBarcodeUtil
+  class "JsonUtil\nJSON 转换" as JsonUtil
+  class "LogisticsConstants\n物流常量" as LogisticsConstants
+}
+
+component "认证服务\nAuth Service" as auth
+component "OMS 邮件服务\nOMS Service" as oms
+component "分拣服务\nSorting Service" as sorting
+component "封发服务\nDispatch Service" as dispatch
+component "运输服务\nTransport Service" as transport
+component "轨迹服务\nTracking Service" as tracking
+
+auth --> common : 复用响应、JWT 与异常模型
+oms --> common : 复用运单号、状态常量与 JSON 工具
+sorting --> common : 复用响应、异常和轨迹事件常量
+dispatch --> common : 复用响应、异常和状态常量
+transport --> common : 复用响应、异常和状态常量
+tracking --> common : 复用响应、JSON 与事件类型
+
+note bottom of common
+公共模块不直接承载业务数据，
+用于统一跨服务基础模型、工具和状态语义。
+end note
+
+@enduml

@@ -1,0 +1,146 @@
+@startuml ReportCoreClassDiagram
+title 报告核心领域类图
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 40
+
+package "Auth" {
+  class UserEntity {
+    Long id
+    String username
+    String displayName
+    String facilityCode
+    String role
+  }
+}
+
+package "Facility" {
+  class FacilityEntity {
+    Long id
+    String facilityCode
+    String name
+    String typeCode
+    String parentFacilityCode
+  }
+}
+
+package "OMS" {
+  class MailEntity {
+    Long id
+    String waybillNo
+    String bagNo
+    String mailTypeCode
+    String serviceType
+    String status
+    String originFacilityCode
+    String currentFacilityCode
+    String destFacilityCode
+  }
+
+  class SenderEntity {
+    Long id
+    String fullName
+    String phone
+    String countryCode
+  }
+
+  class RecipientEntity {
+    Long id
+    String fullName
+    String phone
+    String countryCode
+  }
+}
+
+package "Sorting" {
+  class SortingManifestEntity {
+    Long id
+    String manifestNo
+    String sourceOrgCode
+    String destinationOrgCode
+    String manifestStatus
+  }
+
+  class PackageItemLineEntity {
+    Long id
+    String itemNo
+    String manifestNo
+    String actionType
+    String lineStatus
+  }
+}
+
+package "Dispatch" {
+  class DispatchBagEntity {
+    Long id
+    String bagNo
+    String originFacilityCode
+    String destinationFacilityCode
+    String routeCode
+    String status
+  }
+
+  class DispatchBatchEntity {
+    Long id
+    String batchNo
+    String bagNo
+    String routeCode
+    String status
+  }
+
+  class HandoffRecordEntity {
+    Long id
+    String handoffNo
+    String bagNo
+    String fromFacilityCode
+    String toFacilityCode
+    String status
+  }
+}
+
+package "Transport / Tracking" {
+  class TransportTaskEntity {
+    Long id
+    String taskCode
+    Long dispatchBagId
+    Long routeId
+    String status
+  }
+
+  class TrackingEventEntity {
+    Long id
+    String eventNo
+    String waybillNo
+    String eventType
+    String facilityCode
+    Long operatorId
+    String sourceService
+  }
+}
+
+MailEntity --> SenderEntity : senderId
+MailEntity --> RecipientEntity : recipientId
+MailEntity --> FacilityEntity : origin/current/dest code
+UserEntity --> FacilityEntity : facilityCode
+
+SortingManifestEntity "1" o-- "0..*" PackageItemLineEntity : manifestNo
+PackageItemLineEntity --> MailEntity : itemNo/waybillNo
+
+DispatchBagEntity "1" o-- "0..*" MailEntity : mailNoList
+DispatchBatchEntity --> DispatchBagEntity : bagNo
+HandoffRecordEntity --> DispatchBagEntity : bagNo
+HandoffRecordEntity --> FacilityEntity : from/to code
+HandoffRecordEntity --> UserEntity : receiverId
+
+TransportTaskEntity --> DispatchBagEntity : dispatchBagId
+TrackingEventEntity "*" --> "1" MailEntity : waybillNo
+TrackingEventEntity --> FacilityEntity : facilityCode
+TrackingEventEntity --> UserEntity : operatorId
+
+@enduml

@@ -17,6 +17,7 @@ public class MailResponse {
     private String status;
     private String senderFullName;
     private String recipientFullName;
+    private String recipientPostcode;
     private String originFacilityCode;
     private String currentFacilityCode;
     private String currentSlot;
@@ -47,6 +48,8 @@ public class MailResponse {
     public void setSenderFullName(String senderFullName) { this.senderFullName = senderFullName; }
     public String getRecipientFullName() { return recipientFullName; }
     public void setRecipientFullName(String recipientFullName) { this.recipientFullName = recipientFullName; }
+    public String getRecipientPostcode() { return recipientPostcode; }
+    public void setRecipientPostcode(String recipientPostcode) { this.recipientPostcode = recipientPostcode; }
     public String getOriginFacilityCode() { return originFacilityCode; }
     public void setOriginFacilityCode(String originFacilityCode) { this.originFacilityCode = originFacilityCode; }
     public String getCurrentFacilityCode() { return currentFacilityCode; }

@@ -291,6 +291,9 @@ export const transportApi = {
 };
 
 export const facilityApi = {
+  demoPostalNetwork(token) {
+    return request('facility', '/api/facilities/demo-network', { token });
+  },
   listTypes(token) {
     return request('facility', '/api/facilities/types', { token }).then(unwrapList);
   },

@@ -1,0 +1,84 @@
+@startuml AuthRbacEntityModule
+allowmixing
+title 认证权限 RBAC 实体模块关系图
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.5
+
+skinparam package {
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 16
+}
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #263238
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #F1F8E9
+  BorderColor #689F38
+  FontColor #263238
+  FontSize 14
+}
+
+package "认证权限模块" as auth {
+  class "UserEntity\n系统用户" as UserEntity {
+    username
+    passwordHash
+    realName
+    facilityCode
+    status
+  }
+
+  class "RoleEntity\n角色" as RoleEntity {
+    roleCode
+    roleName
+  }
+
+  class "PermissionEntity\n菜单或操作权限" as PermissionEntity {
+    permissionCode
+    permissionName
+    permissionType
+    path
+  }
+
+  class "UserRoleEntity\n用户角色关联" as UserRoleEntity
+  class "RolePermissionEntity\n角色权限关联" as RolePermissionEntity
+}
+
+component "前端菜单\nVue Router / RBAC" as frontend
+component "后端接口访问控制\nGateway / Auth Filter" as backend
+component "JWT 签发与校验" as jwt
+
+UserEntity "1" -- "0..*" UserRoleEntity : userId
+RoleEntity "1" -- "0..*" UserRoleEntity : roleId
+RoleEntity "1" -- "0..*" RolePermissionEntity : roleId
+PermissionEntity "1" -- "0..*" RolePermissionEntity : permissionId
+
+auth --> jwt : 登录认证后签发令牌
+auth --> frontend : 返回角色与菜单权限
+auth --> backend : 提供接口权限校验依据
+
+note bottom of auth
+UserEntity、RoleEntity、PermissionEntity
+共同构成系统 RBAC 权限模型。
+end note
+
+note bottom of UserRoleEntity
+UserRoleEntity 与 RolePermissionEntity
+用于表达多对多关联关系。
+end note
+
+@enduml

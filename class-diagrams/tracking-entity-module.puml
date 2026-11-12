@@ -1,0 +1,67 @@
+@startuml TrackingEntityModule
+allowmixing
+title 轨迹追踪模块核心实体关系图
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.5
+
+skinparam package {
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 16
+}
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #263238
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #F1F8E9
+  BorderColor #689F38
+  FontColor #263238
+  FontSize 14
+}
+
+package "轨迹追踪模块\nliana-tracking-service" as tracking {
+  class "TrackingEventEntity\n轨迹事件" as TrackingEventEntity {
+    eventNo
+    waybillNo
+    eventType
+    sourceService
+    facilityCode
+    operatorId
+    operatorName
+    eventTime
+    payload
+  }
+}
+
+component "OMS 邮件服务\nOMS Service" as oms
+component "分拣服务\nSorting Service" as sorting
+component "封发服务\nDispatch Service" as dispatch
+component "运输服务\nTransport Service" as transport
+component "前端工作台\nliana-web" as frontend
+
+oms --> tracking : 写入收寄、投递事件
+sorting --> tracking : 写入接收、开拆、分拣事件
+dispatch --> tracking : 写入封发、交接事件
+transport --> tracking : 写入启运、到达事件
+frontend --> tracking : 按运单号查询事件流
+
+note bottom of TrackingEventEntity
+记录邮件全生命周期原子事件，
+是轨迹查询和状态追踪的数据来源。
+end note
+
+@enduml

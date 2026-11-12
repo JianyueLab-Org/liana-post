@@ -8,7 +8,6 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn btn-secondary" @click="fillExample('DOMESTIC')">国内示例</button>
-          <button type="button" class="btn btn-secondary" @click="fillExample('INTERNATIONAL')">国际示例</button>
         </div>
       </div>
 
@@ -24,27 +23,30 @@
         <AdditionalServicesInput class="col-span-2" v-model="form.additionalServices" :options="serviceOptions" :disabled="submitting" />
         <p class="col-span-2 text-sm text-gray-500">信函不选挂号使用 U 条码；选择挂号使用 R 条码并计入挂号费。标签属于业务选项，不是自由文本。</p>
 
-        <select class="select col-span-2" v-model="form.mailScope">
+        <select class="select col-span-2" v-model="form.mailScope" disabled>
           <option value="DOMESTIC">国内邮件</option>
-          <option value="INTERNATIONAL">国际邮件</option>
         </select>
 
-        <select v-if="isInternational" class="select col-span-2" v-model="form.destCountryCode">
-          <option value="">请选择寄达国家</option>
-          <option v-for="item in countries" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
+        <select class="select" v-model="form.senderRegion" required>
+          <option value="">寄件地区</option>
+          <option v-for="item in domesticRegions" :key="item.code" :value="item.code">{{ item.name }}</option>
         </select>
 
         <input class="input" v-model="form.senderFullName" placeholder="寄件人姓名" />
         <input class="input" v-model="form.senderPhone" placeholder="寄件人电话" />
         <input class="input col-span-2" v-model="form.senderAddress" placeholder="寄件人地址" />
-        <input class="input" v-model="form.senderPostcode" placeholder="寄件人邮编" />
+        <input class="input" v-model="form.senderPostcode" placeholder="寄件人邮编（四位）" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required />
         <input class="input" v-model="form.senderIdType" placeholder="证件类型" />
         <input class="input" v-model="form.senderIdNumber" placeholder="证件号码" />
 
         <input class="input" v-model="form.recipientFullName" placeholder="收件人姓名" />
         <input class="input" v-model="form.recipientPhone" placeholder="收件人电话" />
         <input class="input col-span-2" v-model="form.recipientAddress" placeholder="收件人地址" />
-        <input class="input" v-model="form.recipientPostcode" placeholder="收件人邮编" />
+        <select class="select" v-model="form.recipientRegion" required>
+          <option value="">收件地区</option>
+          <option v-for="item in domesticRegions" :key="item.code" :value="item.code">{{ item.name }}</option>
+        </select>
+        <input class="input" v-model="form.recipientPostcode" placeholder="收件人邮编（四位）" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required />
 
         <input class="input" v-model.number="form.weightGrams" type="number" placeholder="重量(g)" />
 
@@ -122,6 +124,12 @@ const countries = ref([]);
 const serviceTypes = ref([]);
 const serviceTypesLoaded = ref(false);
 const DEFAULT_DOMESTIC_SERVICE_TYPE = 'AIR';
+const domesticRegions = [
+  { code: 'NM', name: 'Namoa 主岛' },
+  { code: 'OR', name: 'Oro 北岛群' },
+  { code: 'MI', name: 'Miri 东岛群' },
+  { code: 'SE', name: 'Sela 南岛群' },
+];
 
 const form = reactive({
   mailTypeCode: '',
@@ -133,10 +141,12 @@ const form = reactive({
   senderIdType: 'NID',
   senderIdNumber: '',
   senderAddress: '',
+  senderRegion: '',
   senderPostcode: '',
   recipientFullName: '',
   recipientPhone: '',
   recipientAddress: '',
+  recipientRegion: '',
   recipientPostcode: '',
   weightGrams: 120,
   declaredValue: null,
@@ -173,11 +183,13 @@ async function fillExample(scope) {
     senderIdType: 'NID',
     senderIdNumber: isDomesticExample ? 'LN110101199001010018' : 'LN440305198806060022',
     senderAddress: isDomesticExample ? '利亚纳纳莫阿市中央大道 18 号' : '利亚纳纳莫阿市海港路 6 号',
-    senderPostcode: isDomesticExample ? '10001' : '10003',
+    senderRegion: 'NM',
+    senderPostcode: isDomesticExample ? '1000' : '1000',
     recipientFullName: isDomesticExample ? '周明' : 'Yuki Tanaka',
     recipientPhone: isDomesticExample ? '0900654321' : '+81-3-1234-5678',
     recipientAddress: isDomesticExample ? '利亚纳塔维里市邮政街 12 号' : '1-2-3 Marunouchi, Chiyoda-ku, Tokyo',
-    recipientPostcode: isDomesticExample ? '10002' : '1000005',
+    recipientRegion: isDomesticExample ? 'OR' : 'NM',
+    recipientPostcode: isDomesticExample ? '2000' : '1000',
     weightGrams: isDomesticExample ? 320 : 480,
     declaredValue: isDomesticExample ? null : 120,
     serviceType: isDomesticExample ? '' : chooseCode(serviceTypes.value, ['AIR', 'SAL', 'SEA'], 'AIR'),
@@ -221,11 +233,19 @@ watch(() => form.mailScope, async (value) => {
 });
 
 function mailPayload() {
-  if (!form.mailTypeCode || !form.senderFullName || !form.senderPhone || !form.senderAddress || !form.recipientFullName || !form.recipientPhone || !form.recipientAddress) throw new Error('请补全收寄必填信息');
+  if (!form.mailTypeCode || !form.senderFullName || !form.senderPhone || !form.senderAddress || !form.senderRegion || !form.senderPostcode || !form.recipientFullName || !form.recipientPhone || !form.recipientAddress || !form.recipientRegion || !form.recipientPostcode) throw new Error('请补全收寄必填信息');
+  if (!/^[0-9]{4}$/.test(form.senderPostcode) || !/^[0-9]{4}$/.test(form.recipientPostcode)) throw new Error('寄件人和收件人邮编必须是四位数字');
+  if (!['10', '20', '30', '40'].includes(form.senderPostcode.slice(0, 2)) || !['10', '20', '30', '40'].includes(form.recipientPostcode.slice(0, 2))) throw new Error('邮编不属于首期开放的国内邮区');
+  if (form.mailScope !== 'DOMESTIC') throw new Error('首期只支持国内邮件');
+  if (!domesticRegions.some(item => item.code === form.senderRegion) || !domesticRegions.some(item => item.code === form.recipientRegion)) throw new Error('请选择有效的寄件和收件地区');
   if (!Number.isInteger(form.weightGrams) || form.weightGrams<1) throw new Error('重量须为正整数克');
   if (isInternational.value && (!form.destCountryCode || !form.serviceType)) throw new Error('请选择寄达国和服务类型');
-  return {...form,additionalServices:[...form.additionalServices],serviceType:isInternational.value?form.serviceType:DEFAULT_DOMESTIC_SERVICE_TYPE,
-    destCountryCode:isInternational.value?form.destCountryCode:null,originFacilityCode:session.user?.facilityCode,currentFacilityCode:session.user?.facilityCode};
+  const { senderRegion, recipientRegion, ...mail } = form;
+  const regionName = code => domesticRegions.find(item => item.code === code).name;
+  return {...mail,senderAddress:`${regionName(senderRegion)} ${form.senderAddress.trim()}`,
+    recipientAddress:`${regionName(recipientRegion)} ${form.recipientAddress.trim()}`,
+    additionalServices:[...form.additionalServices],serviceType:DEFAULT_DOMESTIC_SERVICE_TYPE,
+    destCountryCode:null,originFacilityCode:session.user?.facilityCode,currentFacilityCode:session.user?.facilityCode};
 }
 async function getQuote() {
   if (submitting.value || (attempt.value && !reentering.value) || settlement.value || topupAttempt.value)return;
@@ -301,7 +321,7 @@ watch(form,()=>{if((!attempt.value||reentering.value)&&!settlement.value&&!topup
 watch([codesText,traditional,traditionalConfirmed],()=>{if(!topupAttempt.value){checked.value=null;topupCashChecked.value=false;}},{deep:true});
 
 onMounted(async () => {
-  try { await Promise.all([loadMailTypes(), loadCountries(), postageApi.current(session.token).then(v => { tariff.value = v; })]); }
+  try { await Promise.all([loadMailTypes(), postageApi.current(session.token).then(v => { tariff.value = v; })]); }
   catch (e) { result.value = e.message; }
   if(attempt.value)await recover();
   if(topupAttempt.value?.saleId){try{const sale=await retailApi.sale(topupAttempt.value.saleId,session.token);if(sale.sale.status==='PAID'){codesText.value=sale.stamps.filter(s=>s.status==='ISSUED').map(s=>s.code).join('\n');topupAttempt.value=null;topups.clear();result.value='已恢复上次补购邮票，请重新录入邮件及其他已贴邮资后核对。';}}catch(e){result.value=e.message;}}

@@ -35,11 +35,12 @@ const ROLE_MENU_RULES = {
     },
   },
   ADMIN: {
-    top: ['dashboard', 'catalog', 'facility', 'transport', 'system', 'sync'],
+    top: ['dashboard', 'catalog', 'facility', 'transport', 'sorting', 'system', 'sync'],
     children: {
       catalog: ['catalog-countries', 'catalog-service-types'],
-      facility: ['facility-admin', 'facility-offices', 'facility-hubs', 'facility-routes'],
+      facility: ['facility-island-network', 'facility-admin', 'facility-offices', 'facility-hubs', 'facility-routes'],
       transport: ['transport-assets', 'transport-routes', 'transport-schedules', 'transport-tasks'],
+      sorting: ['sorting-route'],
       system: ['system-users', 'system-roles', 'system-permissions', 'system-sentinel'],
       sync: ['sync-overview', 'sync-outbox', 'sync-tasks', 'sync-retries'],
     },
@@ -121,6 +122,7 @@ const MENU_LIBRARY = {
     path: '/facility/offices',
     kind: 'group',
     children: [
+      { id: 'facility-island-network', name: '群岛邮政地图', path: '/facility/island-network' },
       { id: 'facility-admin', name: '机构管理', path: '/facility/admin' },
       { id: 'facility-offices', name: '网点管理', path: '/facility/offices' },
       { id: 'facility-hubs', name: '分拣中心', path: '/facility/hubs' },
@@ -195,7 +197,7 @@ export function buildMenuTree(profile = {}) {
       nodes.push({ ...entry, children: [] });
       continue;
     }
-    if (key === 'sorting' && !allowSortingSection(facilityTypeCode, role)) {
+    if (key === 'sorting' && role !== 'ADMIN' && !allowSortingSection(facilityTypeCode, role)) {
       continue;
     }
     const allowedChildren = rule.children[key] || [];

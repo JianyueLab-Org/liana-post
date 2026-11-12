@@ -28,6 +28,7 @@ import FacilityOfficesView from '../views/facility/FacilityOfficesView.vue';
 import FacilityHubsView from '../views/facility/FacilityHubsView.vue';
 import FacilityRoutesView from '../views/facility/FacilityRoutesView.vue';
 import FacilityAdminView from '../views/facility/FacilityAdminView.vue';
+import IslandNetworkView from '../views/facility/IslandNetworkView.vue';
 import TransportAssetsView from '../views/transport/TransportAssetsView.vue';
 import TransportRoutesView from '../views/transport/TransportRoutesView.vue';
 import TransportSchedulesView from '../views/transport/TransportSchedulesView.vue';
@@ -81,6 +82,7 @@ const routes = [
       { path: '/facility/hubs', name: 'facility-hubs', component: FacilityHubsView, meta: { title: '分拣中心' } },
       { path: '/facility/routes', name: 'facility-routes', component: FacilityRoutesView, meta: { title: '运输路线' } },
       { path: '/facility/admin', name: 'facility-admin', component: FacilityAdminView, meta: { title: '机构管理' } },
+      { path: '/facility/island-network', name: 'facility-island-network', component: IslandNetworkView, meta: { title: '群岛邮政地图', networkAdmin: true } },
       { path: '/transport/assets', name: 'transport-assets', component: TransportAssetsView, meta: { title: '运输资源' } },
       { path: '/transport/routes', name: 'transport-routes', component: TransportRoutesView, meta: { title: '运输线路' } },
       { path: '/transport/schedules', name: 'transport-schedules', component: TransportSchedulesView, meta: { title: '运输计划' } },
@@ -137,7 +139,8 @@ router.beforeEach(async (to) => {
   if (!session.token) return '/login';
   if (to.meta.postage && !canUsePostage(session.user || {})) return '/dashboard';
   if (to.meta.postageAdmin && session.user?.role !== 'ADMIN') return '/dashboard';
-  if (to.path.startsWith('/sorting') && !session.isSortingFacility) {
+  if (to.meta.networkAdmin && session.user?.role !== 'ADMIN') return '/dashboard';
+  if (to.path.startsWith('/sorting') && !session.isSortingFacility && !(to.path === '/sorting/route' && session.user?.role === 'ADMIN')) {
     return '/dashboard';
   }
   if (to.meta.action && !session.hasAction(to.meta.action)) {

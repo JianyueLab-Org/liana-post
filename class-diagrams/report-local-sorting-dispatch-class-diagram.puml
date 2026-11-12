@@ -1,0 +1,102 @@
+@startuml ReportLocalSortingDispatchClassDiagram
+title 局部类图：分拣与封发
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+
+package "Sorting" {
+  class SortingManifestEntity {
+    Long id
+    String manifestNo
+    String manifestType
+    String sourceOrgCode
+    String destinationOrgCode
+    String batchNo
+    String manifestStatus
+  }
+
+  class SortingManifestItemEntity {
+    Long id
+    String manifestNo
+    String expectedPackageNo
+    String itemNo
+    String expectedRouteCode
+    String itemStatus
+  }
+
+  class PackageItemLineEntity {
+    Long id
+    String itemNo
+    String actionType
+    String eventType
+    String fromPackageNo
+    String toPackageNo
+    String manifestNo
+    String lineStatus
+  }
+
+  class DiscrepancyVerificationEntity {
+    Long id
+    String verificationNo
+    String manifestNo
+    String packageNo
+    String itemNo
+    String status
+  }
+}
+
+package "Dispatch" {
+  class DispatchBagEntity {
+    Long id
+    String bagNo
+    String originFacilityCode
+    String destinationFacilityCode
+    String routeCode
+    String mailNoList
+    String status
+  }
+
+  class DispatchBatchEntity {
+    Long id
+    String batchNo
+    String bagNo
+    String routeCode
+    String status
+    Long approvedBy
+  }
+
+  class HandoffRecordEntity {
+    Long id
+    String handoffNo
+    String bagNo
+    String batchNo
+    String fromFacilityCode
+    String toFacilityCode
+    String status
+  }
+
+  class RouteRuleEntity {
+    Long id
+    String ruleCode
+    String sourceFacilityCode
+    String targetFacilityCode
+    String exportFacilityCode
+    Integer priorityLevel
+  }
+}
+
+SortingManifestEntity "1" o-- "0..*" SortingManifestItemEntity : manifestNo
+SortingManifestEntity "1" o-- "0..*" PackageItemLineEntity : manifestNo
+SortingManifestEntity "1" o-- "0..*" DiscrepancyVerificationEntity : manifestNo
+
+PackageItemLineEntity --> DispatchBagEntity : toPackageNo/bagNo
+DispatchBagEntity --> RouteRuleEntity : routeCode/ruleCode
+DispatchBatchEntity --> DispatchBagEntity : bagNo
+HandoffRecordEntity --> DispatchBagEntity : bagNo
+HandoffRecordEntity --> DispatchBatchEntity : batchNo
+
+@enduml

@@ -2,6 +2,8 @@ package com.liana.post.facility.controller;
 
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.model.Result;
+import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
 import com.liana.post.facility.model.dto.FacilityTypeCreateRequest;
@@ -12,6 +14,7 @@ import com.liana.post.facility.service.FacilityService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/facilities")
@@ -31,11 +34,31 @@ public class FacilityController {
     @GetMapping("/{facilityCode}")
     public Result<FacilityEntity> getFacility(@PathVariable("facilityCode") String facilityCode) { return Result.ok(facilityService.getFacility(facilityCode)); }
     @PostMapping("/routes")
-    public Result<FacilityRouteEntity> createRoute(@Valid @RequestBody FacilityRouteCreateRequest request) { return Result.ok(facilityService.createRoute(request)); }
+    public Result<FacilityRouteEntity> createRoute(@Valid @RequestBody FacilityRouteCreateRequest request,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        requireAdministrator(authorization);
+        return Result.ok(facilityService.createRoute(request));
+    }
+    @PutMapping("/routes/{routeCode}")
+    public Result<FacilityRouteEntity> updateRoute(@PathVariable("routeCode") String routeCode,
+            @Valid @RequestBody FacilityRouteCreateRequest request,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        requireAdministrator(authorization);
+        return Result.ok(facilityService.updateRoute(routeCode, request));
+    }
     @GetMapping("/routes")
     public Result<List<FacilityRouteEntity>> listRoutes() { return Result.ok(facilityService.listRoutes()); }
+    @GetMapping("/demo-network")
+    public Result<Map<String, Object>> demoPostalNetwork() { return Result.ok(facilityService.demoPostalNetwork()); }
     @GetMapping("/routes/{routeCode}")
     public Result<FacilityRouteEntity> getRoute(@PathVariable("routeCode") String routeCode) { return Result.ok(facilityService.getRoute(routeCode)); }
     @GetMapping("/dashboard/summary")
     public Result<DashboardSummaryResponse> dashboardSummary() { return Result.ok(facilityService.dashboardSummary()); }
+
+    private void requireAdministrator(String authorization) {
+        String token = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
+        if (!JwtTokenUtil.validateToken(token) || !"ADMIN".equalsIgnoreCase(JwtTokenUtil.getRoleFromToken(token))) {
+            throw new BusinessException(403, "administrator required");
+        }
+    }
 }

@@ -2,6 +2,7 @@ package com.liana.post.oms.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 
 public class MailCreateRequest {
@@ -20,6 +21,8 @@ public class MailCreateRequest {
     private String senderIdNumber;
     @NotBlank
     private String senderAddress;
+    @NotBlank
+    @Pattern(regexp = "\\d{4}", message = "寄件人邮编必须是四位数字")
     private String senderPostcode;
     @NotBlank
     private String recipientFullName;
@@ -27,6 +30,8 @@ public class MailCreateRequest {
     private String recipientPhone;
     @NotBlank
     private String recipientAddress;
+    @NotBlank
+    @Pattern(regexp = "\\d{4}", message = "收件人邮编必须是四位数字")
     private String recipientPostcode;
     private String destCountryCode;
     @NotNull

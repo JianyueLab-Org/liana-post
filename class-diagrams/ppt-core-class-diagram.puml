@@ -1,0 +1,88 @@
+@startuml PptCoreClassDiagram
+title PPT核心领域类图
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 35
+
+class UserEntity {
+  username
+  facilityCode
+  role
+}
+
+class FacilityEntity {
+  facilityCode
+  name
+  typeCode
+}
+
+class MailEntity {
+  waybillNo
+  bagNo
+  status
+  originFacilityCode
+  currentFacilityCode
+  destFacilityCode
+}
+
+class SenderEntity {
+  fullName
+  countryCode
+}
+
+class RecipientEntity {
+  fullName
+  countryCode
+}
+
+class SortingManifestEntity {
+  manifestNo
+  sourceOrgCode
+  destinationOrgCode
+  manifestStatus
+}
+
+class DispatchBagEntity {
+  bagNo
+  routeCode
+  status
+}
+
+class DispatchBatchEntity {
+  batchNo
+  bagNo
+  status
+}
+
+class TransportTaskEntity {
+  taskCode
+  dispatchBagId
+  status
+}
+
+class TrackingEventEntity {
+  eventNo
+  waybillNo
+  eventType
+  eventTime
+}
+
+UserEntity --> FacilityEntity : belongs to
+MailEntity --> SenderEntity : sender
+MailEntity --> RecipientEntity : recipient
+MailEntity --> FacilityEntity : origin/current/dest
+SortingManifestEntity --> MailEntity : scans itemNo
+DispatchBagEntity "1" o-- "0..*" MailEntity : contains
+DispatchBatchEntity --> DispatchBagEntity : approves
+TransportTaskEntity --> DispatchBagEntity : transports
+TrackingEventEntity "*" --> "1" MailEntity : records
+TrackingEventEntity --> UserEntity : operator
+TrackingEventEntity --> FacilityEntity : location
+
+@enduml

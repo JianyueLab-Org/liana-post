@@ -291,10 +291,10 @@ public class SortingServiceImpl implements SortingService {
         OmsClient omsClient = omsClientProvider.getIfAvailable();
         com.liana.post.common.model.Result<com.liana.post.oms.model.dto.MailResponse> mailResult = omsClient == null ? null : omsClient.getMail(itemNo);
         com.liana.post.oms.model.dto.MailResponse mail = mailResult == null ? null : mailResult.getData();
-        String currentFacilityCode = mail != null && StringUtils.hasText(mail.getCurrentFacilityCode())
-                ? mail.getCurrentFacilityCode()
-                : request.getStationCode();
-        RouteResult routeResult = routingStrategy.doRoute(itemNo, currentFacilityCode);
+        String currentFacilityCode = request.getStationCode();
+        RouteResult routeResult = StringUtils.hasText(request.getManualNextHopCode())
+                ? routingStrategy.doManualRoute(itemNo, currentFacilityCode, request.getManualNextHopCode())
+                : routingStrategy.doRoute(itemNo, currentFacilityCode);
         XraySecurityAuditSimulator.XrayAuditSample xray = xraySecurityAuditSimulator.sample();
         List<String> dangerLabels = resolveDangerLabels(mail, xray.getLabels());
         boolean xrayDanger = !dangerLabels.isEmpty();
@@ -303,32 +303,37 @@ public class SortingServiceImpl implements SortingService {
         String routeCode = danger && xrayDanger ? "RETURN_ORIGIN" : routeResult.getSlotCode();
         String nextHop = danger && xrayDanger ? resolveOriginFacilityCode(mail) : routeResult.getNextHopCode();
         String targetNode = danger && xrayDanger ? resolveOriginFacilityCode(mail) : routeResult.getTargetNodeName();
+        boolean manualReview = !danger && "MANUAL_REVIEW".equalsIgnoreCase(routeCode);
         String message = danger && xrayDanger
                 ? "Security blocked: " + String.join(", ", dangerLabels)
                 : routeResult.getMessage();
 
-        PackageItemLineEntity line = new PackageItemLineEntity();
-        line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), routeCode, itemNo));
-        line.setItemNo(itemNo);
-        line.setActionType(SortingConstants.LINE_ACTION_LOAD);
-        line.setEventType(SortingConstants.EVENT_ROUTE);
-        line.setScanMode(SortingConstants.SCAN_MODE_BLIND);
-        line.setToPackageNo(routeCode);
-        line.setTargetCenterCode(routeCode);
-        line.setStationCode(request.getStationCode());
-        line.setOperatorId(request.getOperatorId());
-        line.setDeviceId(request.getDeviceId());
-        line.setExt("{\"securityStatus\":\"" + (danger ? SortingConstants.SECURITY_STATUS_DANGER : SortingConstants.SECURITY_STATUS_PASS)
-                + "\",\"nextHop\":\"" + escapeJson(nextHop)
-                + "\",\"sourceImage\":\"" + escapeJson(xray.getSourceImageName())
-                + "\",\"dangerLabels\":\"" + escapeJson(String.join(",", dangerLabels)) + "\"}");
-        sortingRepository.savePackageItemLine(line);
+        if (!manualReview) {
+            PackageItemLineEntity line = new PackageItemLineEntity();
+            line.setIdempotencyKey(resolveIdempotencyKey(request.getIdempotencyKey(), routeCode, itemNo));
+            line.setItemNo(itemNo);
+            line.setActionType(SortingConstants.LINE_ACTION_LOAD);
+            line.setEventType(SortingConstants.EVENT_ROUTE);
+            line.setScanMode(SortingConstants.SCAN_MODE_BLIND);
+            line.setToPackageNo(routeCode);
+            line.setTargetCenterCode(routeCode);
+            line.setStationCode(request.getStationCode());
+            line.setOperatorId(request.getOperatorId());
+            line.setDeviceId(request.getDeviceId());
+            line.setExt("{\"securityStatus\":\"" + (danger ? SortingConstants.SECURITY_STATUS_DANGER : SortingConstants.SECURITY_STATUS_PASS)
+                    + "\",\"routeCode\":\"" + escapeJson(routeResult.getRouteCode())
+                    + "\",\"transportMode\":\"" + escapeJson(routeResult.getTransportMode())
+                    + "\",\"nextHop\":\"" + escapeJson(nextHop)
+                    + "\",\"sourceImage\":\"" + escapeJson(xray.getSourceImageName())
+                    + "\",\"dangerLabels\":\"" + escapeJson(String.join(",", dangerLabels)) + "\"}");
+            sortingRepository.savePackageItemLine(line);
+        }
 
         if (danger) {
             saveSecurityDiscrepancy(routeCode, itemNo, xray, dangerLabels);
         }
 
-        if (omsClient != null) {
+        if (omsClient != null && !manualReview) {
             com.liana.post.oms.model.dto.MailRouteAssignRequest routeRequest = new com.liana.post.oms.model.dto.MailRouteAssignRequest();
             routeRequest.setCurrentSlot(routeCode);
             routeRequest.setDestinationNode(targetNode);
@@ -339,8 +344,10 @@ public class SortingServiceImpl implements SortingService {
 
         SortingSecurityAuditResponse response = new SortingSecurityAuditResponse();
         response.setItemNo(itemNo);
-        response.setSecurityStatus(danger ? SortingConstants.SECURITY_STATUS_DANGER : SortingConstants.SECURITY_STATUS_PASS);
-        response.setRouteCode(routeCode);
+        response.setSecurityStatus(danger ? SortingConstants.SECURITY_STATUS_DANGER : manualReview ? "MANUAL_REVIEW" : SortingConstants.SECURITY_STATUS_PASS);
+        response.setRouteCode(routeResult.getRouteCode());
+        response.setSlotCode(routeCode);
+        response.setTransportMode(routeResult.getTransportMode());
         response.setNextHop(nextHop);
         response.setMessage(message);
         response.setXrayImage(xray.getImageDataUrl());
@@ -608,7 +615,7 @@ public class SortingServiceImpl implements SortingService {
         totalPackage.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
         totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_RAW);
         totalPackage.setSourceOrgCode(stationCode);
-        totalPackage.setDestinationOrgCode(normalizedSlot);
+        totalPackage.setDestinationOrgCode(resolveDestinationNodeBySlot(normalizedSlot));
         totalPackage = sortingRepository.saveTotalPackage(totalPackage);
 
         for (PackageItemLineEntity loadLine : loadLines) {
@@ -993,6 +1000,9 @@ public class SortingServiceImpl implements SortingService {
 
     private String resolveDestinationNodeBySlot(String slotCode) {
         String normalized = normalizeBlank(slotCode);
+        if (normalized.endsWith("-SLOT")) {
+            return normalized.substring(0, normalized.length() - 5);
+        }
         if ("22".equals(normalized)) {
             return "A2";
         }
@@ -1114,7 +1124,7 @@ public class SortingServiceImpl implements SortingService {
     private SortingSlotSummaryResponse toSlotSummary(String slotCode, List<PackageItemLineEntity> lines) {
         SortingSlotSummaryResponse response = new SortingSlotSummaryResponse();
         response.setSlotCode(slotCode);
-        response.setDestinationOrgCode(slotCode.contains("-SLOT-") ? slotCode.substring(0, slotCode.indexOf("-SLOT-")) : slotCode);
+        response.setDestinationOrgCode(resolveDestinationNodeBySlot(slotCode));
         List<String> items = lines.stream()
                 .map(PackageItemLineEntity::getItemNo)
                 .filter(StringUtils::hasText)

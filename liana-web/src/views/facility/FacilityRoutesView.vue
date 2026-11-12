@@ -9,7 +9,7 @@
         <button class="btn btn-secondary" :disabled="loading" @click="reloadAll">刷新</button>
       </div>
 
-      <div class="mt-4 grid-three">
+      <div v-if="isAdmin" class="mt-4 grid-three">
         <input v-model="form.routeCode" class="input" placeholder="路线编码" />
         <select v-model="form.originFacilityCode" class="select">
           <option value="">选择始发机构</option>
@@ -32,7 +32,7 @@
         </select>
       </div>
 
-      <div class="mt-3 grid-three">
+      <div v-if="isAdmin" class="mt-3 grid-three">
         <input v-model="form.transportMode" class="input" placeholder="运输方式" />
         <input v-model.number="form.priorityLevel" class="input" type="number" placeholder="优先级" />
         <button class="btn btn-primary" :disabled="loading || !canSave" @click="saveRoute">
@@ -45,7 +45,7 @@
     <GenericListView :columns="columns" :rows="displayRows" :status-options="statusOptions">
       <template #title>运输路线列表</template>
       <template #subtitle>支持查看与编辑既有始发 / 目的路由</template>
-      <template #actions="{ row }">
+      <template v-if="isAdmin" #actions="{ row }">
         <button class="btn btn-secondary" @click="edit(row)">编辑</button>
       </template>
     </GenericListView>
@@ -59,6 +59,7 @@ import { facilityApi, mailApi } from '../../lib/api';
 import { useSessionStore } from '../../stores/session';
 
 const session = useSessionStore();
+const isAdmin = computed(() => session.user?.role === 'ADMIN');
 const loading = ref(false);
 const rows = ref([]);
 const facilities = ref([]);

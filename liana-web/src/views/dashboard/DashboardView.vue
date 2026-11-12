@@ -1,5 +1,6 @@
 <template>
   <div class="space-y-6">
+    <IslandPostalMap v-if="role === 'ADMIN'" />
     <section class="card p-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -112,6 +113,7 @@ import { authApi, dispatchApi, facilityApi, mailApi, sortingApi, syncApi, transp
 import { sentinelDemoSummary } from '../../lib/sentinelDemo';
 import { syncerDashboardSection } from '../../lib/syncerDashboard';
 import { useSessionStore } from '../../stores/session';
+import IslandPostalMap from '../../components/IslandPostalMap.vue';
 
 const session = useSessionStore();
 const sections = ref([]);

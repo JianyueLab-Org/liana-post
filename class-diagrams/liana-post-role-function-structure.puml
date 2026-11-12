@@ -1,0 +1,89 @@
+@startuml LianaPostRoleFunctionStructure
+title 基于 Spring Cloud + Vue 的邮政业务管理系统功能结构图
+
+top to bottom direction
+
+skinparam backgroundColor #000000
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 0
+skinparam nodesep 24
+skinparam ranksep 40
+skinparam ArrowColor #9FC4F8
+skinparam ArrowThickness 2
+skinparam titleFontColor #FFFFFF
+
+skinparam rectangle {
+  BackgroundColor #CFE0FA
+  BorderColor #9FC4F8
+  FontColor #1F2937
+  FontSize 15
+}
+
+rectangle "基于 Spring Cloud + Vue 的\n邮政业务管理系统" as system
+
+rectangle "系统管理员" as admin
+rectangle "运营管理人员" as manager
+rectangle "一线业务人员" as staff
+
+system --> admin
+system --> manager
+system --> staff
+
+admin -[hidden]right- manager
+manager -[hidden]right- staff
+
+rectangle "登\n录\n与\n工\n作\n台" as admin_workspace
+rectangle "系\n统\n管\n理" as admin_system
+rectangle "基\n础\n资\n料" as admin_catalog
+rectangle "邮\n政\n网\n络" as admin_facility
+rectangle "同\n步\n监\n控" as admin_sync
+
+admin --> admin_workspace
+admin --> admin_system
+admin --> admin_catalog
+admin --> admin_facility
+admin --> admin_sync
+
+admin_workspace -[hidden]right- admin_system
+admin_system -[hidden]right- admin_catalog
+admin_catalog -[hidden]right- admin_facility
+admin_facility -[hidden]right- admin_sync
+
+rectangle "邮\n件\n管\n理" as manager_mail
+rectangle "封\n发\n管\n理" as manager_dispatch
+rectangle "分\n拣\n管\n理" as manager_sorting
+rectangle "运\n输\n管\n理" as manager_transport
+rectangle "轨\n迹\n查\n询" as manager_tracking
+
+manager --> manager_mail
+manager --> manager_dispatch
+manager --> manager_sorting
+manager --> manager_transport
+manager --> manager_tracking
+
+manager_mail -[hidden]right- manager_dispatch
+manager_dispatch -[hidden]right- manager_sorting
+manager_sorting -[hidden]right- manager_transport
+manager_transport -[hidden]right- manager_tracking
+
+rectangle "收\n寄\n录\n入" as staff_accept
+rectangle "邮\n件\n台\n账" as staff_mailbook
+rectangle "分\n拣\n作\n业" as staff_sorting
+rectangle "总\n包\n交\n接" as staff_handoff
+rectangle "末\n端\n投\n递" as staff_delivery
+
+staff --> staff_accept
+staff --> staff_mailbook
+staff --> staff_sorting
+staff --> staff_handoff
+staff --> staff_delivery
+
+staff_accept -[hidden]right- staff_mailbook
+staff_mailbook -[hidden]right- staff_sorting
+staff_sorting -[hidden]right- staff_handoff
+staff_handoff -[hidden]right- staff_delivery
+
+@enduml

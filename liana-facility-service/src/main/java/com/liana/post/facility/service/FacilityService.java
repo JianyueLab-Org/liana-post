@@ -10,6 +10,7 @@ import com.liana.post.facility.model.entity.FacilityRouteEntity;
 import com.liana.post.facility.model.entity.FacilityTypeEntity;
 
 import java.util.List;
+import java.util.Map;
 
 public interface FacilityService {
     FacilityTypeEntity createFacilityType(FacilityTypeCreateRequest request);
@@ -22,6 +23,7 @@ public interface FacilityService {
     List<FacilityTypeEntity> listFacilityTypes();
     List<FacilityEntity> listFacilities();
     List<FacilityRouteEntity> listRoutes();
+    Map<String, Object> demoPostalNetwork();
     DashboardSummaryResponse dashboardSummary();
     FacilityBootstrapData bootstrapDefaults();
 }

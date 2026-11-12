@@ -6,6 +6,8 @@ public class RouteResult {
     private String nextHopCode;
     private String securityStatus;
     private String message;
+    private String routeCode;
+    private String transportMode;
 
     public String getSlotCode() {
         return slotCode;
@@ -46,4 +48,8 @@ public class RouteResult {
     public void setMessage(String message) {
         this.message = message;
     }
+    public String getRouteCode() { return routeCode; }
+    public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
+    public String getTransportMode() { return transportMode; }
+    public void setTransportMode(String transportMode) { this.transportMode = transportMode; }
 }

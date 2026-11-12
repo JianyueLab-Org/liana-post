@@ -1,0 +1,49 @@
+server:
+  port: ${POSTAGE_SERVER_PORT:8090}
+
+spring:
+  application:
+    name: liana-postage-service
+  datasource:
+    url: ${POSTAGE_DB_URL:jdbc:mysql://127.0.0.1:3306/postage_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC}
+    username: ${POSTAGE_DB_USERNAME:${DB_USERNAME:root}}
+    password: ${POSTAGE_DB_PASSWORD:${DB_PASSWORD:}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: ${POSTAGE_SQL_INIT_MODE:never}
+      schema-locations: classpath:schema.sql,classpath:retail-schema.sql,classpath:acceptance-schema.sql
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+      fail-on-unknown-properties: true
+    parser:
+      strict-duplicate-detection: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        file-extension: yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+postage:
+  seed-initial-tariff: ${POSTAGE_SEED_INITIAL_TARIFF:false}
+  initial-version-id: LIANA-TARIFF-2026-001
+  initial-effective-from: "2026-10-15T00:00:00+08:00"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!standalone"
+    import:
+      - optional:nacos:liana-postage-service.yml

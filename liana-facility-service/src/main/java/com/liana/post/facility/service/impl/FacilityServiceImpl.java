@@ -13,6 +13,7 @@ import com.liana.post.facility.model.dto.FacilityTypeCreateRequest;
 import com.liana.post.facility.model.entity.FacilityEntity;
 import com.liana.post.facility.model.entity.FacilityRouteEntity;
 import com.liana.post.facility.model.entity.FacilityTypeEntity;
+import com.liana.post.facility.mapper.DemoPostalNetworkMapper;
 import com.liana.post.facility.repository.FacilityRepository;
 import com.liana.post.facility.service.FacilityService;
 import org.springframework.beans.factory.ObjectProvider;
@@ -20,16 +21,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class FacilityServiceImpl implements FacilityService {
 
     private final FacilityRepository facilityRepository;
+    private final DemoPostalNetworkMapper demoPostalNetworkMapper;
     private final ObjectProvider<OmsClient> omsClientProvider;
 
-    public FacilityServiceImpl(FacilityRepository facilityRepository, ObjectProvider<OmsClient> omsClientProvider) {
+    public FacilityServiceImpl(FacilityRepository facilityRepository, DemoPostalNetworkMapper demoPostalNetworkMapper,
+                               ObjectProvider<OmsClient> omsClientProvider) {
         this.facilityRepository = facilityRepository;
+        this.demoPostalNetworkMapper = demoPostalNetworkMapper;
         this.omsClientProvider = omsClientProvider;
     }
 
@@ -139,6 +144,18 @@ public class FacilityServiceImpl implements FacilityService {
     @Override
     public List<FacilityRouteEntity> listRoutes() {
         return facilityRepository.findAllRoutes();
+    }
+
+    @Override
+    public Map<String, Object> demoPostalNetwork() {
+        return Map.of(
+                "regions", demoPostalNetworkMapper.findRegions(),
+                "islands", demoPostalNetworkMapper.findIslands(),
+                "facilities", listFacilities(),
+                "routes", listRoutes(),
+                "facilityProfiles", demoPostalNetworkMapper.findFacilityProfiles(),
+                "routeProfiles", demoPostalNetworkMapper.findRouteProfiles()
+        );
     }
 
     @Override

@@ -1,0 +1,94 @@
+@startuml OmsMailEntityModule
+allowmixing
+title OMS 邮件主实体模块关系图
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1.5
+
+skinparam package {
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 16
+}
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #263238
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #F1F8E9
+  BorderColor #689F38
+  FontColor #263238
+  FontSize 14
+}
+
+package "OMS 邮件订单管理模块" as oms {
+  class "MailEntity\n邮件生命周期主实体" as MailEntity {
+    waybillNo
+    bagNo
+    packageId
+    mailTypeCode
+    serviceType
+    mailScope
+    destCountryCode
+    originFacilityCode
+    currentFacilityCode
+    currentSlot
+    destinationNode
+    status
+    weightGrams
+    declaredValue
+  }
+
+  class "SenderEntity\n寄件人信息" as SenderEntity {
+    fullName
+    phone
+    address
+    postcode
+    countryCode
+    idType
+    idNumber
+  }
+
+  class "RecipientEntity\n收件人信息" as RecipientEntity {
+    fullName
+    phone
+    address
+    postcode
+    countryCode
+  }
+}
+
+component "封发服务\nDispatch Service" as dispatch
+component "分拣服务\nSorting Service" as sorting
+component "轨迹服务\nTracking Service" as tracking
+
+SenderEntity "1" <-- "0..*" MailEntity : senderId
+RecipientEntity "1" <-- "0..*" MailEntity : recipientId
+
+oms --> dispatch : 提供待封发邮件数据
+oms --> sorting : 提供状态与路由更新能力
+oms --> tracking : 创建、封发、投递后写入轨迹事件
+
+note bottom of MailEntity
+承载邮件从收寄、封发、分拣、
+到达、投递等阶段的状态变化。
+end note
+
+note bottom of SenderEntity
+与 RecipientEntity 属于 OMS 内部基础资料，
+通过 ID 与 MailEntity 关联。
+end note
+
+@enduml

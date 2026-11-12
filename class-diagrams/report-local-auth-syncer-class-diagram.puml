@@ -1,0 +1,84 @@
+@startuml ReportLocalAuthSyncerClassDiagram
+title 局部类图：权限与同步补偿
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 45
+
+package "Auth" {
+  class UserEntity {
+    Long id
+    String username
+    String displayName
+    String facilityCode
+    Integer status
+  }
+
+  class RoleEntity {
+    Long id
+    String code
+    String name
+    Integer status
+  }
+
+  class PermissionEntity {
+    Long id
+    String code
+    String name
+    Integer status
+  }
+
+  class UserRoleEntity {
+    Long id
+    Long userId
+    Long roleId
+  }
+
+  class RolePermissionEntity {
+    Long id
+    Long roleId
+    Long permissionId
+  }
+}
+
+package "Syncer" {
+  class OutboxMessageEntity {
+    Long id
+    String msgId
+    String eventType
+    String payload
+    String status
+    Integer retryCount
+  }
+
+  class SyncTaskEntity {
+    Long id
+    String taskNo
+    String sourceService
+    String targetService
+    String status
+    Integer retryCount
+  }
+
+  class RetryRecordEntity {
+    Long id
+    String bizType
+    String bizId
+    Integer attemptNo
+    String status
+    String errorMessage
+  }
+}
+
+UserEntity "1" o-- "0..*" UserRoleEntity : userId
+RoleEntity "1" o-- "0..*" UserRoleEntity : roleId
+RoleEntity "1" o-- "0..*" RolePermissionEntity : roleId
+PermissionEntity "1" o-- "0..*" RolePermissionEntity : permissionId
+
+OutboxMessageEntity --> SyncTaskEntity : creates task
+SyncTaskEntity --> RetryRecordEntity : failed attempt
+
+@enduml

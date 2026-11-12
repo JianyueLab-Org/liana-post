@@ -1,0 +1,71 @@
+@startuml ReportLocalOmsMailClassDiagram
+title 局部类图：邮件收寄与基础资料
+
+left to right direction
+hide methods
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class MailEntity {
+  Long id
+  String waybillNo
+  String bagNo
+  String packageId
+  String mailTypeCode
+  String serviceType
+  String mailScope
+  String destCountryCode
+  Long senderId
+  Long recipientId
+  String status
+  Integer weightGrams
+}
+
+class SenderEntity {
+  Long id
+  String fullName
+  String phone
+  String idType
+  String idNumber
+  String countryCode
+}
+
+class RecipientEntity {
+  Long id
+  String fullName
+  String phone
+  String address
+  String postcode
+  String countryCode
+}
+
+class MailTypeEntity {
+  Long id
+  String code
+  String name
+  Integer status
+}
+
+class ServiceTypeEntity {
+  Long id
+  String code
+  String name
+  Integer status
+}
+
+class CountryEntity {
+  Long id
+  String code
+  String name
+}
+
+MailEntity --> SenderEntity : senderId
+MailEntity --> RecipientEntity : recipientId
+MailEntity --> MailTypeEntity : mailTypeCode
+MailEntity --> ServiceTypeEntity : serviceType
+MailEntity --> CountryEntity : destCountryCode
+SenderEntity --> CountryEntity : countryCode
+RecipientEntity --> CountryEntity : countryCode
+
+@enduml
