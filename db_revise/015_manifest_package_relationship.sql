@@ -1,3 +1,5 @@
+USE `sorting_db`;
+
 CREATE TABLE IF NOT EXISTS `sorting_manifest_package` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `manifest_no` VARCHAR(64) NOT NULL,

@@ -25,6 +25,7 @@
     <div class="card p-5">
       <DataTable :columns="columns" :rows="rows">
         <template #actions="{ row }">
+          <button v-if="row.status === 'CREATED'" class="btn btn-secondary" @click="openAssign(row)">指派班次</button>
           <button class="btn btn-secondary" @click="openStatus(row)">改状态</button>
         </template>
       </DataTable>
@@ -34,13 +35,20 @@
       <div class="space-y-3">
         <input v-model="form.taskCode" class="input" placeholder="任务编码，可留空自动生成" />
         <input v-model.number="form.dispatchBagId" class="input" type="number" placeholder="dispatchBagId" />
-        <input v-model.number="form.assetId" class="input" type="number" placeholder="资产ID（可选）" />
-        <input v-model.number="form.routeId" class="input" type="number" placeholder="线路ID（可选）" />
-        <input v-model.number="form.scheduleId" class="input" type="number" placeholder="计划ID（可选）" />
-        <select v-model="form.status" class="select">
-          <option v-for="s in statusOptions" :key="s" :value="s">{{ s }}</option>
+        <select v-model="form.scheduleId" class="select">
+          <option value="">暂不指派班次</option>
+          <option v-for="item in schedules" :key="item.id" :value="String(item.id)">{{ item.scheduleCode }} · {{ item.departureTime }}</option>
         </select>
         <button class="btn btn-primary w-full" @click="save">保存</button>
+      </div>
+    </DetailDrawer>
+    <DetailDrawer :open="assignDrawerOpen" title="指派运输班次" :subtitle="current?.taskCode" @close="assignDrawerOpen = false">
+      <div class="space-y-3">
+        <select v-model="assignScheduleId" class="select">
+          <option value="">请选择未来班次</option>
+          <option v-for="item in schedules" :key="item.id" :value="String(item.id)">{{ item.scheduleCode }} · {{ item.departureTime }}</option>
+        </select>
+        <button class="btn btn-primary w-full" :disabled="!assignScheduleId" @click="saveAssignment">确认指派</button>
       </div>
     </DetailDrawer>
 
@@ -75,6 +83,9 @@ const current = ref(null);
 const drawerOpen = ref(false);
 const dispatchDrawerOpen = ref(false);
 const statusDrawerOpen = ref(false);
+const assignDrawerOpen = ref(false);
+const assignScheduleId = ref('');
+const schedules = ref([]);
 const editing = ref(false);
 const query = reactive({ page: 1, pageSize: 10, keyword: '', status: '' });
 const dispatchBagId = ref('');
@@ -82,6 +93,7 @@ const statusOptions = ['CREATED', 'ASSIGNED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED
 const columns = [
   { key: 'taskCode', label: '任务编码' },
   { key: 'dispatchBagId', label: 'dispatchBagId' },
+  { key: 'bagNos', label: '装载邮袋' },
   { key: 'assetId', label: '资产ID' },
   { key: 'routeId', label: '线路ID' },
   { key: 'scheduleId', label: '计划ID' },
@@ -113,15 +125,24 @@ function openStatus(row) {
   statusForm.status = row.status || 'ASSIGNED';
   statusDrawerOpen.value = true;
 }
+async function openAssign(row) {
+  current.value = row;
+  assignScheduleId.value = '';
+  const result = await transportApi.listSchedules({ page: 1, pageSize: 200 }, session.token);
+  schedules.value = (result.list || []).filter(item => item.status !== 'SUSPENDED' && new Date(item.departureTime) > new Date());
+  assignDrawerOpen.value = true;
+}
+async function saveAssignment() {
+  await transportApi.assignTask(current.value.taskCode, Number(assignScheduleId.value), session.token);
+  assignDrawerOpen.value = false;
+  await load();
+}
 
 async function save() {
   await transportApi.createTask({
     taskCode: form.taskCode || undefined,
     dispatchBagId: Number(form.dispatchBagId),
-    assetId: form.assetId === '' ? null : Number(form.assetId),
-    routeId: form.routeId === '' ? null : Number(form.routeId),
     scheduleId: form.scheduleId === '' ? null : Number(form.scheduleId),
-    status: form.status || undefined,
   }, session.token);
   drawerOpen.value = false;
   await load();

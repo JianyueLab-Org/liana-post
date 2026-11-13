@@ -2,9 +2,11 @@ package com.liana.post.transport.model.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @TableName("transport_task")
 public class TransportTaskEntity {
@@ -17,6 +19,8 @@ public class TransportTaskEntity {
     private Long scheduleId;
     private String status;
     private LocalDateTime createdAt;
+    @TableField(exist = false)
+    private List<String> bagNos;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -34,4 +38,6 @@ public class TransportTaskEntity {
     public void setStatus(String status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public List<String> getBagNos() { return bagNos; }
+    public void setBagNos(List<String> bagNos) { this.bagNos = bagNos; }
 }

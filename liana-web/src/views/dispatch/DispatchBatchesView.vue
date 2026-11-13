@@ -76,7 +76,8 @@ const availableBags = computed(() => {
 
 watch(availableBags, (next) => {
   const available = new Set(next.map((bag) => bag.bagNo));
-  selectedBagNos.value = selectedBagNos.value.filter((bagNo) => available.has(bagNo));
+  const selected = selectedBagNos.value.filter((bagNo) => available.has(bagNo));
+  if (selected.length !== selectedBagNos.value.length) selectedBagNos.value = selected;
 });
 
 async function refresh() {

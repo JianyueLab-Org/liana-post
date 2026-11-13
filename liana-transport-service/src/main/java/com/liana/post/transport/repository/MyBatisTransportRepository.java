@@ -9,17 +9,21 @@ import com.liana.post.transport.mapper.TransportAssetMapper;
 import com.liana.post.transport.mapper.TransportRouteMapper;
 import com.liana.post.transport.mapper.TransportScheduleMapper;
 import com.liana.post.transport.mapper.TransportTaskMapper;
+import com.liana.post.transport.mapper.TransportTaskBagMapper;
 import com.liana.post.transport.model.dto.PageResult;
 import com.liana.post.transport.model.entity.TransportAssetEntity;
 import com.liana.post.transport.model.entity.TransportRouteEntity;
 import com.liana.post.transport.model.entity.TransportScheduleEntity;
 import com.liana.post.transport.model.entity.TransportTaskEntity;
+import com.liana.post.transport.model.entity.TransportTaskBagEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public class MyBatisTransportRepository implements TransportRepository {
@@ -27,12 +31,14 @@ public class MyBatisTransportRepository implements TransportRepository {
     private final TransportRouteMapper routeMapper;
     private final TransportScheduleMapper scheduleMapper;
     private final TransportTaskMapper taskMapper;
+    private final TransportTaskBagMapper taskBagMapper;
 
-    public MyBatisTransportRepository(TransportAssetMapper assetMapper, TransportRouteMapper routeMapper, TransportScheduleMapper scheduleMapper, TransportTaskMapper taskMapper) {
+    public MyBatisTransportRepository(TransportAssetMapper assetMapper, TransportRouteMapper routeMapper, TransportScheduleMapper scheduleMapper, TransportTaskMapper taskMapper, TransportTaskBagMapper taskBagMapper) {
         this.assetMapper = assetMapper;
         this.routeMapper = routeMapper;
         this.scheduleMapper = scheduleMapper;
         this.taskMapper = taskMapper;
+        this.taskBagMapper = taskBagMapper;
     }
 
     @Override
@@ -54,6 +60,11 @@ public class MyBatisTransportRepository implements TransportRepository {
     @Override
     public Optional<TransportAssetEntity> findAssetByCode(String code) {
         return Optional.ofNullable(assetMapper.selectOne(new LambdaQueryWrapper<TransportAssetEntity>().eq(TransportAssetEntity::getCode, normalize(code))));
+    }
+
+    @Override
+    public Optional<TransportAssetEntity> findAssetById(Long id) {
+        return Optional.ofNullable(id == null ? null : assetMapper.selectById(id));
     }
 
     @Override
@@ -92,6 +103,18 @@ public class MyBatisTransportRepository implements TransportRepository {
     }
 
     @Override
+    public Optional<TransportRouteEntity> findRouteById(Long id) {
+        return Optional.ofNullable(id == null ? null : routeMapper.selectById(id));
+    }
+
+    @Override
+    public List<TransportRouteEntity> findRoutesByFacilityRouteCode(String code) {
+        return routeMapper.selectList(new LambdaQueryWrapper<TransportRouteEntity>()
+                .eq(TransportRouteEntity::getFacilityRouteCode, normalize(code))
+                .eq(TransportRouteEntity::getStatus, "ACTIVE"));
+    }
+
+    @Override
     public PageResult<TransportRouteEntity> pageRoutes(long page, long pageSize, String keyword, String status, String transportType) {
         LambdaQueryWrapper<TransportRouteEntity> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(keyword)) {
@@ -127,6 +150,39 @@ public class MyBatisTransportRepository implements TransportRepository {
     @Override
     public Optional<TransportScheduleEntity> findScheduleByCode(String code) {
         return Optional.ofNullable(scheduleMapper.selectOne(new LambdaQueryWrapper<TransportScheduleEntity>().eq(TransportScheduleEntity::getScheduleCode, normalize(code))));
+    }
+
+    @Override
+    public Optional<TransportScheduleEntity> findScheduleById(Long id) {
+        return Optional.ofNullable(id == null ? null : scheduleMapper.selectById(id));
+    }
+
+    @Override
+    public TransportScheduleEntity lockSchedule(Long id) {
+        if (id == null) throw new BusinessException(400, "scheduleId is required");
+        TransportScheduleEntity schedule = scheduleMapper.lockById(id);
+        if (schedule == null) throw new BusinessException(404, "transport schedule not found");
+        return schedule;
+    }
+
+    @Override
+    public List<TransportScheduleEntity> findFutureSchedulesByRouteId(Long routeId) {
+        return scheduleMapper.selectList(new LambdaQueryWrapper<TransportScheduleEntity>()
+                .eq(TransportScheduleEntity::getRouteId, routeId)
+                .ge(TransportScheduleEntity::getDepartureTime, LocalDateTime.now())
+                .in(TransportScheduleEntity::getStatus, "ACTIVE", "PLANNED")
+                .orderByAsc(TransportScheduleEntity::getDepartureTime));
+    }
+
+    @Override
+    public List<TransportScheduleEntity> findOverlappingSchedules(Long assetId, LocalDateTime departure, LocalDateTime arrival, Long excludedId) {
+        LambdaQueryWrapper<TransportScheduleEntity> query = new LambdaQueryWrapper<TransportScheduleEntity>()
+                .eq(TransportScheduleEntity::getAssetId, assetId)
+                .lt(TransportScheduleEntity::getDepartureTime, arrival)
+                .gt(TransportScheduleEntity::getArrivalTime, departure)
+                .ne(TransportScheduleEntity::getStatus, "SUSPENDED");
+        if (excludedId != null) query.ne(TransportScheduleEntity::getId, excludedId);
+        return scheduleMapper.selectList(query);
     }
 
     @Override
@@ -189,7 +245,63 @@ public class MyBatisTransportRepository implements TransportRepository {
         if (dispatchBagId == null) {
             return Optional.empty();
         }
+        Optional<TransportTaskBagEntity> link = findTaskBagByDispatchBagId(dispatchBagId);
+        if (link.isPresent()) return Optional.ofNullable(taskMapper.selectById(link.get().getTaskId()));
         return Optional.ofNullable(taskMapper.selectOne(new LambdaQueryWrapper<TransportTaskEntity>().eq(TransportTaskEntity::getDispatchBagId, dispatchBagId)));
+    }
+
+    @Override
+    public Optional<TransportTaskEntity> findActiveTaskByScheduleId(Long scheduleId) {
+        return taskMapper.selectList(new LambdaQueryWrapper<TransportTaskEntity>()
+                .eq(TransportTaskEntity::getScheduleId, scheduleId)
+                .in(TransportTaskEntity::getStatus, "CREATED", "ASSIGNED"))
+                .stream().findFirst();
+    }
+
+    @Override
+    public Optional<TransportTaskBagEntity> findTaskBagByDispatchBagId(Long dispatchBagId) {
+        return Optional.ofNullable(taskBagMapper.selectOne(new LambdaQueryWrapper<TransportTaskBagEntity>()
+                .eq(TransportTaskBagEntity::getDispatchBagId, dispatchBagId)));
+    }
+
+    @Override
+    public List<TransportTaskBagEntity> findTaskBags(Long taskId) {
+        return taskBagMapper.selectList(new LambdaQueryWrapper<TransportTaskBagEntity>()
+                .eq(TransportTaskBagEntity::getTaskId, taskId));
+    }
+
+    @Override
+    @Transactional
+    public void addTaskBag(TransportTaskBagEntity bag) {
+        if (taskBagMapper.insert(bag) <= 0) throw new BusinessException(500, "failed to load dispatch bag");
+    }
+
+    @Override
+    public List<TransportTaskBagEntity> findUnlinkedTaskBags() {
+        return taskBagMapper.selectList(new LambdaQueryWrapper<TransportTaskBagEntity>()
+                .isNull(TransportTaskBagEntity::getLinkedAt).orderByAsc(TransportTaskBagEntity::getId).last("LIMIT 100"));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markTaskBagLinked(Long id) {
+        TransportTaskBagEntity link = taskBagMapper.selectById(id);
+        if (link != null && link.getLinkedAt() == null) {
+            link.setLinkedAt(LocalDateTime.now());
+            taskBagMapper.updateById(link);
+        }
+    }
+
+    @Override
+    public Optional<TransportTaskEntity> findTaskById(Long id) {
+        return Optional.ofNullable(taskMapper.selectById(id));
+    }
+
+    @Override
+    public List<TransportTaskEntity> findTasksByScheduleId(Long scheduleId) {
+        return taskMapper.selectList(new LambdaQueryWrapper<TransportTaskEntity>()
+                .eq(TransportTaskEntity::getScheduleId, scheduleId)
+                .ne(TransportTaskEntity::getStatus, "CANCELLED"));
     }
 
     @Override

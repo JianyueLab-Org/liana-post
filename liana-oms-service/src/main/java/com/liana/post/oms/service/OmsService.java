@@ -27,7 +27,7 @@ public interface OmsService {
     List<ServiceTypeResponse> listServiceTypes();
     List<ServiceTypeResponse> listServiceTypesByCountry(String countryCode);
     List<MailDispatchCandidateResponse> listDispatchCandidates(MailDispatchCandidateQueryRequest request);
-    List<MailPackageSummaryResponse> listPackages();
+    List<MailPackageSummaryResponse> listPackages(String currentFacilityCode);
     List<MailResponse> listPendingDeliveryMails(String currentFacilityCode);
     MailResponse updateMailStatus(String waybillNo, MailStatusUpdateRequest request);
     MailResponse assignMailBag(String waybillNo, MailBagAssignRequest request);

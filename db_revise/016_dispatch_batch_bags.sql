@@ -1,3 +1,5 @@
+USE `dispatch_db`;
+
 CREATE TABLE IF NOT EXISTS `dispatch_batch_bag` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `batch_no` VARCHAR(32) NOT NULL,

@@ -5,8 +5,47 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class OmsServiceImplTest {
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void packageReceptionUsesDestinationAndReturnOrigin() {
+        var repository = mock(com.liana.post.oms.repository.OmsRepository.class);
+        var dispatch = mock(org.springframework.beans.factory.ObjectProvider.class);
+        var tracking = mock(org.springframework.beans.factory.ObjectProvider.class);
+        var service = new OmsServiceImpl(repository, dispatch, tracking, null);
+
+        var oro = packageSummary("ORO-1", "B1", "LN-OR-01");
+        var b2 = packageSummary("B2-1", "B1", "B2");
+        var returned = packageSummary("RETURN-1", "B1", "RETURN_ORIGIN");
+        when(repository.findPackageSummaries()).thenReturn(java.util.List.of(oro, b2, returned));
+        when(repository.findMailsByPackageId("ORO-1")).thenReturn(java.util.List.of(packageMail("B1", "LN-OR-01")));
+        when(repository.findMailsByPackageId("RETURN-1")).thenReturn(java.util.List.of(packageMail("B1", "RETURN_ORIGIN")));
+
+        assertEquals(java.util.List.of("ORO-1"), service.listPackages("LN-OR-01").stream()
+                .map(com.liana.post.oms.model.dto.MailPackageSummaryResponse::getPackageId).toList());
+        assertEquals(java.util.List.of("RETURN-1"), service.listPackages("B1").stream()
+                .map(com.liana.post.oms.model.dto.MailPackageSummaryResponse::getPackageId).toList());
+        assertThrows(BusinessException.class, () -> service.receiveAndOpenMailPackage("RETURN-1", "LN-OR-01"));
+    }
+
+    private com.liana.post.oms.model.dto.MailPackageSummaryResponse packageSummary(String packageId, String origin, String destination) {
+        var summary = new com.liana.post.oms.model.dto.MailPackageSummaryResponse();
+        summary.setPackageId(packageId);
+        summary.setOriginFacilityCode(origin);
+        summary.setDestinationNode(destination);
+        return summary;
+    }
+
+    private com.liana.post.oms.model.entity.MailEntity packageMail(String origin, String destination) {
+        var mail = new com.liana.post.oms.model.entity.MailEntity();
+        mail.setOriginFacilityCode(origin);
+        mail.setDestinationNode(destination);
+        return mail;
+    }
 
     @Test
     @SuppressWarnings("unchecked")

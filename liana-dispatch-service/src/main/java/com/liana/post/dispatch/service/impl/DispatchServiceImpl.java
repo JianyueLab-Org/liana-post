@@ -9,9 +9,12 @@ import com.liana.post.common.dto.sorting.ManifestArrivedRequest;
 import com.liana.post.common.dto.sorting.ManifestDTO;
 import com.liana.post.common.dto.sorting.TotalPackageDTO;
 import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.constant.AuthConstants;
+import com.liana.post.common.model.JwtUserContext;
 import com.liana.post.common.model.Result;
 import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.dispatch.client.OmsClient;
+import com.liana.post.dispatch.client.FacilityRouteClient;
 import com.liana.post.dispatch.client.SortingManifestClient;
 import com.liana.post.dispatch.constant.DispatchConstants;
 import com.liana.post.dispatch.model.dto.DispatchBagCreateRequest;
@@ -48,6 +51,12 @@ import java.net.http.HttpResponse;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Queue;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +69,7 @@ public class DispatchServiceImpl implements DispatchService {
     private final ObjectProvider<OmsClient> omsClientProvider;
     private final HttpServletRequest httpServletRequest;
     private final ObjectProvider<SortingManifestClient> sortingClientProvider;
+    private final ObjectProvider<FacilityRouteClient> facilityRouteClientProvider;
     private final String sortingServiceUrl;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -67,11 +77,13 @@ public class DispatchServiceImpl implements DispatchService {
                                ObjectProvider<OmsClient> omsClientProvider,
                                HttpServletRequest httpServletRequest,
                                ObjectProvider<SortingManifestClient> sortingClientProvider,
+                               ObjectProvider<FacilityRouteClient> facilityRouteClientProvider,
                                @Value("${sorting.service.url:http://localhost:8087}") String sortingServiceUrl) {
         this.dispatchRepository = dispatchRepository;
         this.omsClientProvider = omsClientProvider;
         this.httpServletRequest = httpServletRequest;
         this.sortingClientProvider = sortingClientProvider;
+        this.facilityRouteClientProvider = facilityRouteClientProvider;
         this.sortingServiceUrl = sortingServiceUrl;
     }
 
@@ -144,6 +156,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public DispatchBagResponse createDispatchBag(DispatchBagCreateRequest request) {
+        assertBagOriginOwned(requireCurrentUser(), request.getOriginFacilityCode());
         List<String> mailNos = request.getMailNoList();
         if (mailNos == null || mailNos.isEmpty()) {
             throw new BusinessException(400, "mailNoList cannot be empty");
@@ -154,11 +167,13 @@ public class DispatchServiceImpl implements DispatchService {
         String effectiveCountryCode = resolveEffectiveDestCountryCode(request.getDestCountryCode(), candidates);
         String destinationFacilityCode = resolveDestinationFacilityCode(request.getDestinationFacilityCode(), candidates);
         boolean international = effectiveCountryCode != null && !isDomesticCountry(effectiveCountryCode);
-        RouteRuleEntity route = resolveRoute(request.getRouteCode(), request.getOriginFacilityCode(), destinationFacilityCode,
+        String nextHop = international || request.getRouteCode() != null && !request.getRouteCode().isBlank()
+                ? destinationFacilityCode : resolveDomesticNextHop(request.getOriginFacilityCode(), destinationFacilityCode);
+        RouteRuleEntity route = resolveRoute(request.getRouteCode(), request.getOriginFacilityCode(), nextHop,
                 international ? effectiveCountryCode : null, international);
         // Post offices can form a new total package before sorting/export route is known.
         // If a route exists, keep it on the bag; otherwise downstream sorting resolves it later.
-        String resolvedTargetFacilityCode = resolveRouteTarget(route, destinationFacilityCode);
+        String resolvedTargetFacilityCode = resolveRouteTarget(route, nextHop);
         if (international && route != null && route.getExportFacilityCode() != null && !route.getExportFacilityCode().isBlank()) {
             resolvedTargetFacilityCode = route.getExportFacilityCode();
         }
@@ -167,6 +182,8 @@ public class DispatchServiceImpl implements DispatchService {
         entity.setOriginFacilityCode(request.getOriginFacilityCode());
         entity.setDestinationFacilityCode(resolvedTargetFacilityCode);
         entity.setRouteCode(route == null ? request.getRouteCode() : route.getRuleCode());
+        entity.setFacilityRouteCode(resolveFacilityRouteCode(request.getOriginFacilityCode(), resolvedTargetFacilityCode,
+                route == null ? null : route.getTransportMode()));
         entity.setMailTypeCode(request.getMailTypeCode());
         entity.setMailNoListAsList(mailNos);
         entity.setMailCount(mailNos.size());
@@ -185,6 +202,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public DispatchBatchResponse createDispatchBatch(DispatchBatchCreateRequest request) {
+        JwtUserContext user = requireCurrentUser();
         List<String> requestedBagNos = request.getBagNos() == null || request.getBagNos().isEmpty()
                 ? (request.getBagNo() == null || request.getBagNo().isBlank() ? List.of() : List.of(request.getBagNo()))
                 : request.getBagNos();
@@ -204,6 +222,7 @@ public class DispatchServiceImpl implements DispatchService {
             throw new BusinessException(400, "dispatch batch route must match the bag route");
         }
         for (DispatchBagEntity candidate : bags) {
+            assertBagOriginOwned(user, candidate.getOriginFacilityCode());
             if (!java.util.Objects.equals(candidate.getOriginFacilityCode(), bag.getOriginFacilityCode())
                     || !java.util.Objects.equals(candidate.getDestinationFacilityCode(), bag.getDestinationFacilityCode())
                     || !java.util.Objects.equals(candidate.getRouteCode(), bag.getRouteCode())) {
@@ -230,8 +249,14 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public DispatchBatchResponse approveDispatchBatch(String batchNo, DispatchBatchApproveRequest request) {
+        JwtUserContext user = requireCurrentUser();
         DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBatchNo(batchNo)
                 .orElseThrow(() -> new BusinessException(404, "dispatch batch not found"));
+        for (String bagNo : getBatchBagNos(batch)) {
+            DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(bagNo)
+                    .orElseThrow(() -> new BusinessException(404, "dispatch bag not found: " + bagNo));
+            assertBagOriginOwned(user, bag.getOriginFacilityCode());
+        }
         if (!DispatchConstants.BATCH_STATUS_PENDING.equals(batch.getStatus())) {
             throw new BusinessException(409, "only pending dispatch batches can be approved");
         }
@@ -255,7 +280,14 @@ public class DispatchServiceImpl implements DispatchService {
         if (!currentFacilityCode.equalsIgnoreCase(bag.getOriginFacilityCode())) {
             throw new BusinessException(403, "current facility does not own this dispatch bag");
         }
-        if (!java.util.Objects.equals(request.getToFacilityCode(), bag.getDestinationFacilityCode())) {
+        String destinationFacilityCode = bag.getDestinationFacilityCode();
+        if (destinationFacilityCode == null || destinationFacilityCode.isBlank()) {
+            destinationFacilityCode = resolveFacilityRouteDestination(currentFacilityCode, request.getToFacilityCode());
+            bag.setDestinationFacilityCode(destinationFacilityCode);
+            bag.setUpdatedAt(LocalDateTime.now());
+            dispatchRepository.updateDispatchBag(bag);
+        }
+        if (!destinationFacilityCode.equalsIgnoreCase(request.getToFacilityCode().trim())) {
             throw new BusinessException(400, "handoff destination must match the bag destination");
         }
         if (DispatchConstants.BAG_STATUS_DISPATCHED.equals(bag.getStatus())
@@ -306,9 +338,17 @@ public class DispatchServiceImpl implements DispatchService {
                 .toList();
         if (batchBags.size() != batchBagNos.size() || batchBags.stream().anyMatch(item ->
                 !currentFacilityCode.equalsIgnoreCase(item.getOriginFacilityCode())
-                        || !java.util.Objects.equals(request.getToFacilityCode(), item.getDestinationFacilityCode()))) {
+                        || (item.getDestinationFacilityCode() != null && !item.getDestinationFacilityCode().isBlank()
+                        && !request.getToFacilityCode().equalsIgnoreCase(item.getDestinationFacilityCode())))) {
             throw new BusinessException(409, "all bags in a batch must be handed off together along their planned route");
         }
+        String resolvedDestinationFacilityCode = destinationFacilityCode;
+        batchBags.stream().filter(item -> item.getDestinationFacilityCode() == null || item.getDestinationFacilityCode().isBlank())
+                .forEach(item -> {
+                    item.setDestinationFacilityCode(resolvedDestinationFacilityCode);
+                    item.setUpdatedAt(LocalDateTime.now());
+                    dispatchRepository.updateDispatchBag(item);
+                });
         syncManifestToSorting("M" + batch.getBatchNo(), batch.getRouteCode(), bag.getOriginFacilityCode(),
                 request.getToFacilityCode(), batchBags);
 
@@ -478,23 +518,52 @@ public class DispatchServiceImpl implements DispatchService {
         if (request == null || request.getTransportTaskCode() == null || request.getTransportTaskCode().isBlank()) {
             throw new BusinessException(400, "transportTaskCode is required");
         }
-        DispatchBagEntity entity = dispatchRepository.linkTransportTask(id, request.getTransportTaskCode().trim());
+        DispatchBagEntity existing = dispatchRepository.findDispatchBagById(id)
+                .orElseThrow(() -> new BusinessException(404, "dispatch bag not found: " + id));
+        if (existing.getTransportTaskCode() != null && !existing.getTransportTaskCode().isBlank()
+                && !existing.getTransportTaskCode().equals(request.getTransportTaskCode().trim())) {
+            throw new BusinessException(409, "dispatch bag is already linked to a different transport task");
+        }
+        DispatchBagEntity entity = existing.getTransportTaskCode() == null
+                ? dispatchRepository.linkTransportTask(id, request.getTransportTaskCode().trim()) : existing;
         return toBagResponse(entity);
     }
 
     @Override
     public List<DispatchBagResponse> listDispatchBags() {
-        return dispatchRepository.findAllDispatchBags().stream().map(this::toBagResponse).toList();
+        JwtUserContext user = requireCurrentUser();
+        return dispatchRepository.findAllDispatchBags().stream()
+                .filter(bag -> isAdmin(user) || belongsToFacility(bag, user.getFacilityCode()))
+                .map(this::toBagResponse).toList();
     }
 
     @Override
     public List<DispatchBatchResponse> listDispatchBatches() {
-        return dispatchRepository.findAllDispatchBatches().stream().map(this::toBatchResponse).toList();
+        JwtUserContext user = requireCurrentUser();
+        if (isAdmin(user)) {
+            return dispatchRepository.findAllDispatchBatches().stream().map(this::toBatchResponse).toList();
+        }
+        Set<String> ownedBagNos = dispatchRepository.findAllDispatchBags().stream()
+                .filter(bag -> belongsToFacility(bag, user.getFacilityCode()))
+                .map(DispatchBagEntity::getBagNo).collect(Collectors.toSet());
+        return dispatchRepository.findAllDispatchBatches().stream()
+                .filter(batch -> getBatchBagNos(batch).stream().anyMatch(ownedBagNos::contains))
+                .map(batch -> {
+                    List<String> visibleBagNos = getBatchBagNos(batch).stream().filter(ownedBagNos::contains).toList();
+                    batch.setBagNo(visibleBagNos.get(0));
+                    batch.setBagNos(visibleBagNos);
+                    return toBatchResponse(batch);
+                }).toList();
     }
 
     @Override
     public List<HandoffRecordResponse> listHandoffRecords() {
-        return dispatchRepository.findAllHandoffRecords().stream().map(this::toHandoffResponse).toList();
+        JwtUserContext user = requireCurrentUser();
+        return dispatchRepository.findAllHandoffRecords().stream()
+                .filter(record -> isAdmin(user)
+                        || matchesFacility(record.getFromFacilityCode(), user.getFacilityCode())
+                        || matchesFacility(record.getToFacilityCode(), user.getFacilityCode()))
+                .map(this::toHandoffResponse).toList();
     }
 
     @Override
@@ -713,6 +782,7 @@ public class DispatchServiceImpl implements DispatchService {
         response.setOriginFacilityCode(entity.getOriginFacilityCode());
         response.setDestinationFacilityCode(entity.getDestinationFacilityCode());
         response.setRouteCode(entity.getRouteCode());
+        response.setFacilityRouteCode(entity.getFacilityRouteCode());
         response.setTransportTaskCode(entity.getTransportTaskCode());
         response.setStatus(effectiveBagStatus(entity));
         response.setMailTypeCode(entity.getMailTypeCode());
@@ -768,5 +838,118 @@ public class DispatchServiceImpl implements DispatchService {
         }
         String token = authorization.replaceFirst("(?i)^Bearer\\s+", "");
         return JwtTokenUtil.getFacilityCodeFromToken(token);
+    }
+
+    private String resolveFacilityRouteDestination(String originFacilityCode, String requestedDestination) {
+        FacilityRouteClient client = facilityRouteClientProvider.getIfAvailable();
+        if (client == null) {
+            throw new BusinessException(503, "facility route service is unavailable");
+        }
+        try {
+            var result = client.listRoutes();
+            boolean routeExists = result != null && result.isSuccess() && result.getData() != null
+                    && result.getData().stream().anyMatch(route -> Integer.valueOf(1).equals(route.getStatus())
+                    && route.getOriginFacilityCode() != null && route.getOriginFacilityCode().equalsIgnoreCase(originFacilityCode)
+                    && route.getDestinationFacilityCode() != null && route.getDestinationFacilityCode().equalsIgnoreCase(requestedDestination.trim()));
+            if (!routeExists) {
+                throw new BusinessException(400, "handoff destination must match an active facility route");
+            }
+            return requestedDestination.trim().toUpperCase();
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(503, "failed to verify handoff facility route");
+        }
+    }
+
+    private String resolveFacilityRouteCode(String origin, String destination, String mode) {
+        FacilityRouteClient client = facilityRouteClientProvider.getIfAvailable();
+        if (client == null) throw new BusinessException(503, "facility route service is unavailable");
+        try {
+            var result = client.listRoutes();
+            if (result == null || !result.isSuccess() || result.getData() == null) {
+                throw new BusinessException(503, "facility route lookup failed");
+            }
+            return result.getData().stream()
+                    .filter(edge -> Integer.valueOf(1).equals(edge.getStatus()))
+                    .filter(edge -> origin.equalsIgnoreCase(edge.getOriginFacilityCode())
+                            && destination.equalsIgnoreCase(edge.getDestinationFacilityCode()))
+                    .filter(edge -> mode == null || mode.equalsIgnoreCase(edge.getTransportMode())
+                            || ("TRUCK".equalsIgnoreCase(mode) && "LAND".equalsIgnoreCase(edge.getTransportMode())))
+                    .map(FacilityRouteClient.FacilityRouteView::getRouteCode)
+                    .sorted().findFirst().orElse(null);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(503, "facility route lookup failed");
+        }
+    }
+
+    private String resolveDomesticNextHop(String origin, String destination) {
+        if (origin == null || destination == null || origin.equalsIgnoreCase(destination)) return destination;
+        FacilityRouteClient client = facilityRouteClientProvider.getIfAvailable();
+        if (client == null) throw new BusinessException(503, "facility route service is unavailable");
+        var result = client.listRoutes();
+        if (result == null || !result.isSuccess() || result.getData() == null) {
+            throw new BusinessException(503, "facility route lookup failed");
+        }
+        Map<String, List<FacilityRouteClient.FacilityRouteView>> graph = new HashMap<>();
+        for (var edge : result.getData()) {
+            if (edge != null && Integer.valueOf(1).equals(edge.getStatus())
+                    && edge.getOriginFacilityCode() != null && edge.getDestinationFacilityCode() != null) {
+                graph.computeIfAbsent(edge.getOriginFacilityCode().toUpperCase(), ignored -> new ArrayList<>()).add(edge);
+            }
+        }
+        graph.values().forEach(edges -> edges.sort(Comparator
+                .comparing((FacilityRouteClient.FacilityRouteView edge) -> edge.getPriorityLevel() == null ? 0 : edge.getPriorityLevel())
+                .thenComparing(edge -> edge.getEstimatedHours() == null ? java.math.BigDecimal.ZERO : edge.getEstimatedHours())
+                .thenComparing(FacilityRouteClient.FacilityRouteView::getRouteCode)));
+        Queue<String> queue = new ArrayDeque<>();
+        Map<String, String> firstHop = new HashMap<>();
+        String source = origin.toUpperCase();
+        String target = destination.toUpperCase();
+        queue.add(source);
+        firstHop.put(source, source);
+        while (!queue.isEmpty()) {
+            String current = queue.remove();
+            for (var edge : graph.getOrDefault(current, List.of())) {
+                String next = edge.getDestinationFacilityCode().toUpperCase();
+                if (firstHop.containsKey(next)) continue;
+                firstHop.put(next, current.equals(source) ? next : firstHop.get(current));
+                if (next.equals(target)) return firstHop.get(next);
+                queue.add(next);
+            }
+        }
+        return destination;
+    }
+
+    private JwtUserContext requireCurrentUser() {
+        String authorization = httpServletRequest.getHeader("Authorization");
+        if (authorization == null || !authorization.matches("(?i)^Bearer\\s+\\S+$")) {
+            throw new BusinessException(401, "valid bearer token is required");
+        }
+        JwtUserContext user = JwtTokenUtil.getUserContextFromToken(authorization.replaceFirst("(?i)^Bearer\\s+", ""));
+        if (user == null || user.getRole() == null || user.getRole().isBlank()) {
+            throw new BusinessException(401, "valid bearer token is required");
+        }
+        if (!isAdmin(user) && (user.getFacilityCode() == null || user.getFacilityCode().isBlank())) {
+            throw new BusinessException(403, "current facility cannot be resolved from token");
+        }
+        return user;
+    }
+
+    private boolean isAdmin(JwtUserContext user) {
+        return AuthConstants.ROLE_ADMIN.equalsIgnoreCase(user.getRole());
+    }
+
+    private void assertBagOriginOwned(JwtUserContext user, String originFacilityCode) {
+        if (!isAdmin(user) && !matchesFacility(originFacilityCode, user.getFacilityCode())) {
+            throw new BusinessException(403, "current facility does not own this dispatch bag");
+        }
+    }
+
+    private boolean belongsToFacility(DispatchBagEntity bag, String facilityCode) {
+        return matchesFacility(bag.getOriginFacilityCode(), facilityCode)
+                || matchesFacility(bag.getDestinationFacilityCode(), facilityCode);
     }
 }

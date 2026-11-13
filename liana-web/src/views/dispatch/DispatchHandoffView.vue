@@ -16,9 +16,9 @@
         </select>
 
         <select class="select w-full" v-model="form.toFacilityCode">
-          <option value="">请选择接收机构</option>
-          <option v-if="!routeTargets.length" value="" disabled>暂无可选接收机构</option>
-          <option v-for="item in routeTargets" :key="item.destinationFacilityCode" :value="item.destinationFacilityCode">
+          <option value="">{{ selectedBag?.destinationFacilityCode ? '请选择邮袋目的机构' : '请选择接收机构' }}</option>
+          <option v-if="!routeTargets.length" value="" disabled>{{ selectedBag?.destinationFacilityCode ? '邮袋目的地没有启用邮路' : '暂无可选接收机构' }}</option>
+          <option v-for="item in routeTargets" :key="item.routeCode || `${item.originFacilityCode}-${item.destinationFacilityCode}`" :value="item.destinationFacilityCode">
             {{ item.destinationFacilityCode }} · {{ facilityLabel(item.destinationFacilityCode) }}
           </option>
         </select>
@@ -50,6 +50,7 @@ const form = reactive({ bagNo: '', toFacilityCode: '', receiverId: session.user?
 
 const currentFacilityCode = computed(() => session.user?.facilityCode || '');
 const currentFacilityLabel = computed(() => facilityLabel(currentFacilityCode.value));
+const selectedBag = computed(() => bags.value.find((item) => item.bagNo === form.bagNo) || null);
 const handedOffBagNos = computed(() => new Set(handoffs.value
   .filter((item) => item.status === 'COMPLETED')
   .map((item) => item.bagNo)
@@ -58,8 +59,17 @@ const availableBags = computed(() => bags.value.filter((item) =>
   item.originFacilityCode === currentFacilityCode.value
   && item.status !== 'DISPATCHED'
   && !handedOffBagNos.value.has(item.bagNo)));
-const routeTargets = computed(() => routes.value.filter((item) => item.originFacilityCode === currentFacilityCode.value));
+const routeTargets = computed(() => routes.value.filter((item) => item.originFacilityCode === currentFacilityCode.value
+  && item.status === 1
+  && (!selectedBag.value?.destinationFacilityCode
+    || item.destinationFacilityCode === selectedBag.value.destinationFacilityCode)));
 const canSubmit = computed(() => Boolean(form.bagNo && form.toFacilityCode) && !submitting.value);
+
+watch(routeTargets, (targets) => {
+  if (form.toFacilityCode && !targets.some((item) => item.destinationFacilityCode === form.toFacilityCode)) {
+    form.toFacilityCode = '';
+  }
+});
 
 function facilityLabel(code) {
   const facility = facilities.value.find((item) => item.facilityCode === code);
@@ -94,9 +104,6 @@ async function refreshBags() {
 
 async function loadRoutes() {
   routes.value = await facilityApi.listRoutes(session.token);
-  if (!form.toFacilityCode && routeTargets.value.length) {
-    form.toFacilityCode = routeTargets.value[0].destinationFacilityCode;
-  }
 }
 
 watch(currentFacilityCode, () => {

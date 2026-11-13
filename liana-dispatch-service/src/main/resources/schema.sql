@@ -32,6 +32,7 @@ CREATE TABLE `dispatch_bag` (
   `origin_facility_code` VARCHAR(64) NOT NULL,
   `destination_facility_code` VARCHAR(64) NOT NULL,
   `route_code` VARCHAR(64) DEFAULT NULL,
+  `facility_route_code` VARCHAR(64) DEFAULT NULL,
   `transport_task_code` VARCHAR(64) DEFAULT NULL,
   `mail_no_list` JSON NOT NULL,
   `mail_type_code` VARCHAR(64) NOT NULL,

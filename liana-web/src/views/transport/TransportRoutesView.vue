@@ -35,6 +35,12 @@
     <DetailDrawer :open="drawerOpen" :title="editing ? '编辑线路' : '新增线路'" :subtitle="form.routeCode || '未命名线路'" @close="drawerOpen = false">
       <div class="space-y-3">
         <input v-model="form.routeCode" class="input" placeholder="线路编码" />
+        <select v-model="form.facilityRouteCode" class="select" @change="selectFacilityRoute">
+          <option value="">请选择启用的封发邮路边</option>
+          <option v-for="edge in facilityRoutes.filter(item => Number(item.status) === 1)" :key="edge.routeCode" :value="edge.routeCode">
+            {{ edge.routeCode }}：{{ edge.originFacilityCode }} → {{ edge.destinationFacilityCode }} ({{ edge.transportMode }})
+          </option>
+        </select>
         <div class="space-y-1">
           <label class="text-xs text-gray-500">起始设施</label>
           <select v-model="form.originFacilityCode" class="select">
@@ -78,6 +84,7 @@ const transportTypes = ['SEA', 'AIR', 'LAND'];
 const statusOptions = ['ACTIVE', 'PLANNED', 'DISABLED'];
 const columns = [
   { key: 'routeCode', label: '线路编码' },
+  { key: 'facilityRouteCode', label: '封发邮路边' },
   { key: 'originFacilityId', label: '起始设施ID' },
   { key: 'destinationFacilityId', label: '目的设施ID' },
   { key: 'transportType', label: '运输类型' },
@@ -88,12 +95,18 @@ const columns = [
 const query = reactive({ page: 1, pageSize: 10, keyword: '', status: '', transportType: '' });
 const rows = ref([]);
 const facilities = ref([]);
+const facilityRoutes = ref([]);
 const drawerOpen = ref(false);
 const editing = ref(false);
-const form = reactive({ routeCode: '', originFacilityCode: '', destinationFacilityCode: '', transportType: 'LAND', estimatedHours: '', status: 'ACTIVE' });
+const form = reactive({ routeCode: '', facilityRouteCode: '', originFacilityCode: '', destinationFacilityCode: '', transportType: 'LAND', estimatedHours: '', status: 'ACTIVE' });
+function selectFacilityRoute() {
+  const edge = facilityRoutes.value.find(item => item.routeCode === form.facilityRouteCode);
+  if (edge) Object.assign(form, { originFacilityCode: edge.originFacilityCode, destinationFacilityCode: edge.destinationFacilityCode, transportType: edge.transportMode });
+}
 
 async function loadFacilities() {
   facilities.value = await facilityApi.listFacilities(session.token);
+  facilityRoutes.value = await facilityApi.listRoutes(session.token);
 }
 
 async function load() {
@@ -103,7 +116,7 @@ async function load() {
 
 function openCreate() {
   editing.value = false;
-  Object.assign(form, { routeCode: '', originFacilityCode: '', destinationFacilityCode: '', transportType: 'LAND', estimatedHours: '', status: 'ACTIVE' });
+  Object.assign(form, { routeCode: '', facilityRouteCode: '', originFacilityCode: '', destinationFacilityCode: '', transportType: 'LAND', estimatedHours: '', status: 'ACTIVE' });
   drawerOpen.value = true;
 }
 
@@ -111,6 +124,7 @@ function openEdit(row) {
   editing.value = true;
   Object.assign(form, {
     routeCode: row.routeCode || '',
+    facilityRouteCode: row.facilityRouteCode || '',
     originFacilityCode: row.originFacilityId ? String(row.originFacilityId) : '',
     destinationFacilityCode: row.destinationFacilityId ? String(row.destinationFacilityId) : '',
     transportType: row.transportType || 'LAND',
@@ -123,6 +137,7 @@ function openEdit(row) {
 async function save() {
   const payload = {
     routeCode: form.routeCode,
+    facilityRouteCode: form.facilityRouteCode,
     originFacilityCode: form.originFacilityCode,
     destinationFacilityCode: form.destinationFacilityCode,
     transportType: form.transportType,

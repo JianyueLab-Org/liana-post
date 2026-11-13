@@ -1,16 +1,20 @@
 package com.liana.post.common.dto.dispatch;
 
+import java.util.List;
+
 public class DispatchBagBriefResponse {
     private Long dispatchBagId;
     private String bagNo;
     private String originFacilityCode;
     private String destinationFacilityCode;
     private String routeCode;
+    private String facilityRouteCode;
     private String transportTaskCode;
     private String status;
     private String mailTypeCode;
     private Integer mailCount;
     private Integer totalWeightGrams;
+    private List<String> mailNoList;
 
     public Long getDispatchBagId() {
         return dispatchBagId;
@@ -52,6 +56,9 @@ public class DispatchBagBriefResponse {
         this.routeCode = routeCode;
     }
 
+    public String getFacilityRouteCode() { return facilityRouteCode; }
+    public void setFacilityRouteCode(String facilityRouteCode) { this.facilityRouteCode = facilityRouteCode; }
+
     public String getTransportTaskCode() {
         return transportTaskCode;
     }
@@ -91,4 +98,7 @@ public class DispatchBagBriefResponse {
     public void setTotalWeightGrams(Integer totalWeightGrams) {
         this.totalWeightGrams = totalWeightGrams;
     }
+
+    public List<String> getMailNoList() { return mailNoList; }
+    public void setMailNoList(List<String> mailNoList) { this.mailNoList = mailNoList; }
 }

@@ -140,6 +140,7 @@ services:
       DISPATCH_DB_USERNAME: root
       DISPATCH_DB_PASSWORD: liana_demo
       SORTING_SERVICE_URL: http://liana-sorting-service:8087
+      FACILITY_SERVICE_URL: http://liana-facility-service:8084
 
   liana-sorting-service:
     <<: *backend-common

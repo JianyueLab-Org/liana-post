@@ -276,6 +276,9 @@ export const transportApi = {
   createTaskFromDispatchBag(dispatchBagId, token) {
     return request('transport', `/api/transport/tasks/from-dispatch/${encodeURIComponent(dispatchBagId)}`, { method: 'POST', token });
   },
+  assignTask(code, scheduleId, token) {
+    return request('transport', `/api/transport/tasks/${encodeURIComponent(code)}/assign`, { method: 'POST', query: { scheduleId }, token });
+  },
   getTask(code, token) {
     return request('transport', `/api/transport/tasks/${encodeURIComponent(code)}`, { token });
   },

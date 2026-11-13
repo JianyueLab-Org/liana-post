@@ -9,6 +9,7 @@ public class MailPackageSummaryResponse {
     private String originFacilityCode;
     private String currentFacilityCode;
     private String destinationNode;
+    private String destinationFacilityCode;
     private String packageStatus;
     private Integer mailCount;
     private Integer dispatchedCount;
@@ -48,6 +49,14 @@ public class MailPackageSummaryResponse {
 
     public void setDestinationNode(String destinationNode) {
         this.destinationNode = destinationNode;
+    }
+
+    public String getDestinationFacilityCode() {
+        return destinationFacilityCode;
+    }
+
+    public void setDestinationFacilityCode(String destinationFacilityCode) {
+        this.destinationFacilityCode = destinationFacilityCode;
     }
 
     public String getPackageStatus() {

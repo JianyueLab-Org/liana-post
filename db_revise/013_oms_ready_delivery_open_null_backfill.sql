@@ -1,3 +1,5 @@
+USE `oms_db`;
+
 -- Backfill mails that were opened before null-clearing used explicit SQL SET clauses.
 -- MyBatis-Plus updateById ignores null entity fields by default, so package_id,
 -- bag_no or current_slot may remain populated even after status became READY_FOR_DELIVERY.

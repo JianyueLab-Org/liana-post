@@ -9,6 +9,7 @@ public class DispatchBagResponse {
     private String originFacilityCode;
     private String destinationFacilityCode;
     private String routeCode;
+    private String facilityRouteCode;
     private String transportTaskCode;
     private String status;
     private String mailTypeCode;
@@ -28,6 +29,8 @@ public class DispatchBagResponse {
     public void setDestinationFacilityCode(String destinationFacilityCode) { this.destinationFacilityCode = destinationFacilityCode; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
+    public String getFacilityRouteCode() { return facilityRouteCode; }
+    public void setFacilityRouteCode(String facilityRouteCode) { this.facilityRouteCode = facilityRouteCode; }
     public String getTransportTaskCode() { return transportTaskCode; }
     public void setTransportTaskCode(String transportTaskCode) { this.transportTaskCode = transportTaskCode; }
     public String getStatus() { return status; }

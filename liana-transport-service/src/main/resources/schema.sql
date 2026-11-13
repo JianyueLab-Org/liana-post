@@ -1,6 +1,7 @@
 CREATE DATABASE IF NOT EXISTS `transport_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `transport_db`;
 
+DROP TABLE IF EXISTS `transport_task_bag`;
 DROP TABLE IF EXISTS `transport_task`;
 DROP TABLE IF EXISTS `transport_schedule`;
 DROP TABLE IF EXISTS `transport_route`;
@@ -22,6 +23,7 @@ CREATE TABLE `transport_asset` (
 CREATE TABLE `transport_route` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `route_code` VARCHAR(64) NOT NULL,
+  `facility_route_code` VARCHAR(64) DEFAULT NULL,
   `origin_facility_id` VARCHAR(64) NOT NULL,
   `destination_facility_id` VARCHAR(64) NOT NULL,
   `transport_type` VARCHAR(32) NOT NULL,
@@ -70,6 +72,19 @@ CREATE TABLE `transport_task` (
   CONSTRAINT `fk_transport_task_asset` FOREIGN KEY (`asset_id`) REFERENCES `transport_asset` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_transport_task_route` FOREIGN KEY (`route_id`) REFERENCES `transport_route` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_transport_task_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `transport_schedule` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `transport_task_bag` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `task_id` BIGINT NOT NULL,
+  `dispatch_bag_id` BIGINT NOT NULL,
+  `bag_no` VARCHAR(32) NOT NULL,
+  `weight_grams` INT NOT NULL DEFAULT 0,
+  `linked_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_transport_task_bag_dispatch` (`dispatch_bag_id`),
+  KEY `idx_transport_task_bag_task` (`task_id`),
+  CONSTRAINT `fk_transport_task_bag_task` FOREIGN KEY (`task_id`) REFERENCES `transport_task` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `transport_asset` (`code`, `name`, `type`, `capacity`, `status`) VALUES

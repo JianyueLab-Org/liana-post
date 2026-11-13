@@ -709,6 +709,7 @@ public class MyBatisOmsRepository implements OmsRepository {
         response.setOriginFacilityCode(firstText(mails.stream().map(MailEntity::getOriginFacilityCode).toList()));
         response.setCurrentFacilityCode(firstText(mails.stream().map(MailEntity::getCurrentFacilityCode).toList()));
         response.setDestinationNode(firstText(mails.stream().map(MailEntity::getDestinationNode).toList()));
+        response.setDestinationFacilityCode(firstText(mails.stream().map(MailEntity::getDestFacilityCode).toList()));
         response.setPackageStatus(resolvePackageStatus(mails));
         response.setLatestUpdatedAt(mails.stream().map(MailEntity::getUpdatedAt).filter(java.util.Objects::nonNull).max(LocalDateTime::compareTo).orElse(null));
         response.setPreviewWaybillNos(mails.stream().map(MailEntity::getWaybillNo).filter(StringUtils::hasText).limit(5).toList());

@@ -111,6 +111,17 @@ public class TransportController {
         return Result.ok(transportService.createTaskFromDispatchBag(dispatchBagId));
     }
 
+    @PostMapping("/tasks/{taskCode}/assign")
+    public Result<TransportTaskEntity> assignTask(@PathVariable("taskCode") String taskCode,
+                                                   @RequestParam("scheduleId") Long scheduleId) {
+        return Result.ok(transportService.assignTask(taskCode, scheduleId));
+    }
+
+    @PostMapping("/tasks/retry-links")
+    public Result<Integer> retryUnlinkedTaskBags() {
+        return Result.ok(transportService.retryUnlinkedTaskBags());
+    }
+
     @PostMapping("/tasks/{taskCode}/status")
     public Result<TransportTaskEntity> updateTaskStatus(@PathVariable("taskCode") String taskCode, @Valid @RequestBody TransportTaskStatusRequest request) {
         return Result.ok(transportService.updateTaskStatus(taskCode, request));

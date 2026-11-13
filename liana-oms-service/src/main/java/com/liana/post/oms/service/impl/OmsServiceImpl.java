@@ -158,8 +158,19 @@ public class OmsServiceImpl implements OmsService {
     }
 
     @Override
-    public List<MailPackageSummaryResponse> listPackages() {
-        return omsRepository.findPackageSummaries();
+    public List<MailPackageSummaryResponse> listPackages(String currentFacilityCode) {
+        List<MailPackageSummaryResponse> packages = omsRepository.findPackageSummaries();
+        if (!org.springframework.util.StringUtils.hasText(currentFacilityCode)) {
+            return packages;
+        }
+        return packages.stream()
+                .filter(item -> packageDestinationMatches(item, currentFacilityCode))
+                .filter(item -> {
+                    List<MailEntity> packageMails = omsRepository.findMailsByPackageId(item.getPackageId());
+                    return !packageMails.isEmpty() && packageMails.stream()
+                            .allMatch(mail -> packageDestinationMatches(mail, currentFacilityCode));
+                })
+                .toList();
     }
 
     @Override
@@ -244,7 +255,16 @@ public class OmsServiceImpl implements OmsService {
     @Override
     @Transactional
     public int receiveAndOpenMailPackage(String packageId, String currentFacilityCode) {
+        if (!org.springframework.util.StringUtils.hasText(currentFacilityCode)) {
+            throw new BusinessException(403, "current facility is required to receive a package");
+        }
         List<MailEntity> packageMails = omsRepository.findMailsByPackageId(packageId);
+        if (packageMails.isEmpty()) {
+            throw new BusinessException(404, "package not found: " + packageId);
+        }
+        if (packageMails.stream().anyMatch(mail -> !packageDestinationMatches(mail, currentFacilityCode))) {
+            throw new BusinessException(403, "package is not addressed to the current facility");
+        }
         int updated = omsRepository.receiveAndOpenMailPackage(packageId, currentFacilityCode);
         if (updated > 0) {
             packageMails.forEach(mail ->
@@ -308,7 +328,7 @@ public class OmsServiceImpl implements OmsService {
         List<MailResponse> mails = listMails().stream()
                 .filter(mail -> facilityCode == null || facilityCode.isBlank() || matches(mail.getCurrentFacilityCode(), facilityCode) || matches(mail.getOriginFacilityCode(), facilityCode))
                 .toList();
-        List<MailPackageSummaryResponse> packages = listPackages().stream()
+        List<MailPackageSummaryResponse> packages = listPackages(null).stream()
                 .filter(pack -> facilityCode == null || facilityCode.isBlank() || matches(pack.getCurrentFacilityCode(), facilityCode) || matches(pack.getOriginFacilityCode(), facilityCode))
                 .toList();
         long pendingDelivery = mails.stream()
@@ -426,6 +446,30 @@ public class OmsServiceImpl implements OmsService {
             return LogisticsConstants.TRACKING_EVENT_RETURNED;
         }
         return LogisticsConstants.TRACKING_EVENT_SORTED;
+    }
+
+    private boolean packageDestinationMatches(MailPackageSummaryResponse item, String facilityCode) {
+        return isPackageTarget(item.getDestinationNode(), item.getDestinationFacilityCode(),
+                item.getOriginFacilityCode(), facilityCode);
+    }
+
+    private boolean packageDestinationMatches(MailEntity mail, String facilityCode) {
+        return isPackageTarget(mail.getDestinationNode(), mail.getDestFacilityCode(),
+                mail.getOriginFacilityCode(), facilityCode);
+    }
+
+    private boolean isPackageTarget(String destinationNode, String destinationFacilityCode,
+                                    String originFacilityCode, String facilityCode) {
+        if (!org.springframework.util.StringUtils.hasText(facilityCode)) {
+            return false;
+        }
+        String target = destinationNode;
+        if ("RETURN_ORIGIN".equalsIgnoreCase(target)) {
+            target = originFacilityCode;
+        } else if (!org.springframework.util.StringUtils.hasText(target)) {
+            target = destinationFacilityCode;
+        }
+        return org.springframework.util.StringUtils.hasText(target) && matches(target, facilityCode);
     }
 
     private String safeJson(String value) {

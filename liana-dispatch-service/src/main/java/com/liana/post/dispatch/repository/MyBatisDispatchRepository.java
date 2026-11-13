@@ -268,14 +268,11 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     @Override
     @Transactional
     public DispatchBagEntity linkTransportTask(Long id, String transportTaskCode) {
+        int updated = dispatchBagMapper.linkIfUnassigned(id, transportTaskCode);
         DispatchBagEntity bag = dispatchBagMapper.selectById(id);
-        if (bag == null) {
-            throw new BusinessException(404, "dispatch bag not found: " + id);
-        }
-        bag.setTransportTaskCode(transportTaskCode);
-        stamp(bag);
-        if (dispatchBagMapper.updateById(bag) <= 0) {
-            throw new BusinessException(500, "failed to link transport task");
+        if (bag == null) throw new BusinessException(404, "dispatch bag not found: " + id);
+        if (updated == 0 && !transportTaskCode.equals(bag.getTransportTaskCode())) {
+            throw new BusinessException(409, "dispatch bag is already linked to a different transport task");
         }
         return bag;
     }

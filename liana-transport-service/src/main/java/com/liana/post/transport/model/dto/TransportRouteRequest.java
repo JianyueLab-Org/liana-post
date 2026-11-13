@@ -9,6 +9,8 @@ public class TransportRouteRequest {
     @NotBlank
     private String routeCode;
     @NotBlank
+    private String facilityRouteCode;
+    @NotBlank
     private String originFacilityCode;
     @NotBlank
     private String destinationFacilityCode;
@@ -22,6 +24,8 @@ public class TransportRouteRequest {
 
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
+    public String getFacilityRouteCode() { return facilityRouteCode; }
+    public void setFacilityRouteCode(String facilityRouteCode) { this.facilityRouteCode = facilityRouteCode; }
     public String getOriginFacilityCode() { return originFacilityCode; }
     public void setOriginFacilityCode(String originFacilityCode) { this.originFacilityCode = originFacilityCode; }
     public String getDestinationFacilityCode() { return destinationFacilityCode; }

@@ -2,9 +2,13 @@ package com.liana.post.oms.controller;
 
 import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
+import com.liana.post.common.constant.AuthConstants;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
+import com.liana.post.common.exception.BusinessException;
+import com.liana.post.common.model.JwtUserContext;
 import com.liana.post.common.model.Result;
+import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.oms.model.dto.CountryResponse;
 import com.liana.post.oms.model.dto.MailBagAssignRequest;
 import com.liana.post.oms.model.dto.MailCreateRequest;
@@ -75,8 +79,9 @@ public class OmsController {
     }
 
     @GetMapping("/packages")
-    public Result<List<MailPackageSummaryResponse>> listPackages() {
-        return Result.ok(omsService.listPackages());
+    public Result<List<MailPackageSummaryResponse>> listPackages(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        JwtUserContext user = requireCurrentUser(authorization);
+        return Result.ok(omsService.listPackages(isAdmin(user) ? null : requireFacilityCode(user)));
     }
 
     @GetMapping("/packages/pending-delivery")
@@ -117,8 +122,11 @@ public class OmsController {
 
     @PostMapping("/packages/receive-open")
     public Result<Integer> receiveAndOpenPackage(@Valid @RequestBody MailPackageActionRequest request,
-                                                 @RequestHeader(name = HEADER_FACILITY_CODE, required = false) String headerFacilityCode) {
-        return Result.ok(omsService.receiveAndOpenMailPackage(request.getPackageId(), resolveFacilityCode(request.getCurrentFacilityCode(), headerFacilityCode)));
+                                                 @RequestHeader(name = "Authorization", required = false) String authorization) {
+        JwtUserContext user = requireCurrentUser(authorization);
+        String facilityCode = isAdmin(user) && hasText(request.getCurrentFacilityCode())
+                ? request.getCurrentFacilityCode().trim() : requireFacilityCode(user);
+        return Result.ok(omsService.receiveAndOpenMailPackage(request.getPackageId(), facilityCode));
     }
 
     @GetMapping("/slots")
@@ -180,5 +188,27 @@ public class OmsController {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private JwtUserContext requireCurrentUser(String authorization) {
+        if (!hasText(authorization) || !authorization.matches("(?i)^Bearer\\s+\\S+$")) {
+            throw new BusinessException(401, "valid bearer token is required");
+        }
+        JwtUserContext user = JwtTokenUtil.getUserContextFromToken(authorization.replaceFirst("(?i)^Bearer\\s+", ""));
+        if (user == null || !hasText(user.getRole())) {
+            throw new BusinessException(401, "valid bearer token is required");
+        }
+        return user;
+    }
+
+    private boolean isAdmin(JwtUserContext user) {
+        return AuthConstants.ROLE_ADMIN.equalsIgnoreCase(user.getRole());
+    }
+
+    private String requireFacilityCode(JwtUserContext user) {
+        if (!hasText(user.getFacilityCode())) {
+            throw new BusinessException(403, "current facility cannot be resolved from token");
+        }
+        return user.getFacilityCode().trim();
     }
 }

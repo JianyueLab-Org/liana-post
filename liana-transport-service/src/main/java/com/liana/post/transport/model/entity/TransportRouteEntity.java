@@ -12,6 +12,7 @@ public class TransportRouteEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String routeCode;
+    private String facilityRouteCode;
     private String originFacilityId;
     private String destinationFacilityId;
     private String transportType;
@@ -24,6 +25,8 @@ public class TransportRouteEntity {
     public void setId(Long id) { this.id = id; }
     public String getRouteCode() { return routeCode; }
     public void setRouteCode(String routeCode) { this.routeCode = routeCode; }
+    public String getFacilityRouteCode() { return facilityRouteCode; }
+    public void setFacilityRouteCode(String facilityRouteCode) { this.facilityRouteCode = facilityRouteCode; }
     public String getOriginFacilityId() { return originFacilityId; }
     public void setOriginFacilityId(String originFacilityId) { this.originFacilityId = originFacilityId; }
     public String getDestinationFacilityId() { return destinationFacilityId; }

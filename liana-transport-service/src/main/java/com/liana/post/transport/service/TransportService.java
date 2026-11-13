@@ -30,6 +30,8 @@ public interface TransportService {
 
     TransportTaskEntity createTask(TransportTaskRequest request);
     TransportTaskEntity createTaskFromDispatchBag(Long dispatchBagId);
+    TransportTaskEntity assignTask(String taskCode, Long scheduleId);
+    int retryUnlinkedTaskBags();
     TransportTaskEntity updateTaskStatus(String taskCode, TransportTaskStatusRequest request);
     TransportTaskEntity getTask(String taskCode);
     PageResult<TransportTaskEntity> pageTasks(long page, long pageSize, String keyword, String status);
