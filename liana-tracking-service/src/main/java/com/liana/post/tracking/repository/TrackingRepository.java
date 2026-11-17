@@ -12,6 +12,4 @@ public interface TrackingRepository {
     List<TrackingEventEntity> findAll();
     List<TrackingEventEntity> findByWaybillNo(String waybillNo);
     List<TrackingEventEntity> findByWaybillNoAndFilters(String waybillNo, String eventType, String sourceService, String facilityCode);
-    boolean hasAnyData();
-    void seedDefaults();
 }

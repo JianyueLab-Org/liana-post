@@ -17,6 +17,7 @@ public interface SortingRepository {
     List<SortingTotalPackageEntity> findAllTotalPackages();
     SortingManifestEntity saveManifest(SortingManifestEntity entity);
     Optional<SortingManifestEntity> findManifestByNo(String manifestNo);
+    Optional<SortingManifestEntity> lockManifestByNo(String manifestNo);
     List<SortingManifestEntity> findAllManifests();
     List<SortingManifestItemEntity> findManifestItems(String manifestNo);
     SortingManifestItemEntity saveManifestItem(SortingManifestItemEntity entity);
@@ -35,6 +36,4 @@ public interface SortingRepository {
     DiscrepancyVerificationEntity saveDiscrepancy(DiscrepancyVerificationEntity entity);
     List<DiscrepancyVerificationEntity> findDiscrepanciesByPackage(String packageNo);
     List<DiscrepancyVerificationEntity> findAllDiscrepancies();
-    boolean hasAnyData();
-    void seedDefaults();
 }

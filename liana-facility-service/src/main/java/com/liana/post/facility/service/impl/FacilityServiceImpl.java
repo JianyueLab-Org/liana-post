@@ -6,7 +6,6 @@ import com.liana.post.common.model.Result;
 import com.liana.post.facility.client.OmsClient;
 import com.liana.post.facility.constant.FacilityConstants;
 import com.liana.post.facility.model.dto.CountryResponse;
-import com.liana.post.facility.model.dto.FacilityBootstrapData;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
 import com.liana.post.facility.model.dto.FacilityTypeCreateRequest;
@@ -179,121 +178,6 @@ public class FacilityServiceImpl implements FacilityService {
                 DashboardSummaryResponse.item("停用", routes.size() - activeRoutes, "DISABLED")
         ));
         return response;
-    }
-
-    @Override
-    public FacilityBootstrapData bootstrapDefaults() {
-        if (facilityRepository.hasAnyData()) {
-            FacilityBootstrapData current = new FacilityBootstrapData();
-            current.setFacilityTypes(facilityRepository.findAllFacilityTypes().stream().map(this::toTypeRequest).toList());
-            current.setFacilities(facilityRepository.findAllFacilities().stream().map(this::toFacilityRequest).toList());
-            current.setRoutes(facilityRepository.findAllRoutes().stream().map(this::toRouteRequest).toList());
-            return current;
-        }
-
-        FacilityBootstrapData data = new FacilityBootstrapData();
-        data.setFacilityTypes(List.of(
-                type(FacilityConstants.TYPE_POST_OFFICE, "邮局", "基层邮政网点"),
-                type(FacilityConstants.TYPE_TRANSFER_CENTER, "转运中心", "邮件集散与转运中心"),
-                type(FacilityConstants.TYPE_INTERNATIONAL_GATEWAY, "国际交换局", "国际邮件交换节点"),
-                type(FacilityConstants.TYPE_AIR_HUB, "航空节点", "空运中转节点"),
-                type(FacilityConstants.TYPE_SEA_HUB, "海运节点", "海运中转节点")
-        ));
-        data.setFacilities(List.of(
-                fac("A1", "Liana Prime", FacilityConstants.TYPE_TRANSFER_CENTER, null, "A1主枢纽"),
-                fac("A2", "International Exchange Bureau", FacilityConstants.TYPE_INTERNATIONAL_GATEWAY, "A1", "A2国际互换局"),
-                fac("B1", "Namoa Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B1支局"),
-                fac("B2", "Taviri Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B2支局"),
-                fac("B3", "Kelea Post Office", FacilityConstants.TYPE_POST_OFFICE, "A1", "B3支局"),
-                fac("C1", "Oro Island Office", FacilityConstants.TYPE_POST_OFFICE, "B1", "C1岛屿网点"),
-                fac("C2", "Miri Island Office", FacilityConstants.TYPE_POST_OFFICE, "B2", "C2岛屿网点"),
-                fac("C3", "Sela Island Office", FacilityConstants.TYPE_POST_OFFICE, "B3", "C3岛屿网点")
-        ));
-        data.setRoutes(List.of(
-                route("R-A1-B1", "A1", "B1", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
-                route("R-A1-A2", "A1", "A2", FacilityConstants.DEFAULT_TRANSPORT_MODE_AIR),
-                route("R-A2-A1", "A2", "A1", FacilityConstants.DEFAULT_TRANSPORT_MODE_AIR),
-                route("R-A1-B2", "A1", "B2", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
-                route("R-A1-B3", "A1", "B3", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND),
-                route("R-B1-A1", "B1", "A1", FacilityConstants.DEFAULT_TRANSPORT_MODE_LAND)
-        ));
-
-        for (var request : data.getFacilityTypes()) {
-            createFacilityType(request);
-        }
-        for (var request : data.getFacilities()) {
-            createFacility(request);
-        }
-        for (var request : data.getRoutes()) {
-            createRoute(request);
-        }
-        return data;
-    }
-
-    private FacilityTypeCreateRequest type(String code, String name, String description) {
-        FacilityTypeCreateRequest request = new FacilityTypeCreateRequest();
-        request.setCode(code);
-        request.setName(name);
-        request.setDescription(description);
-        return request;
-    }
-
-    private FacilityCreateRequest fac(String facilityCode, String name, String typeCode, String parentFacilityCode, String address) {
-        FacilityCreateRequest request = new FacilityCreateRequest();
-        request.setFacilityCode(facilityCode);
-        request.setName(name);
-        request.setTypeCode(typeCode);
-        request.setParentFacilityCode(parentFacilityCode);
-        request.setCountryCode(FacilityConstants.DEFAULT_COUNTRY_CODE);
-        request.setProvince("Liana Province");
-        request.setCity("Liana City");
-        request.setAddress(address);
-        return request;
-    }
-
-    private FacilityRouteCreateRequest route(String routeCode, String origin, String destination, String transportMode) {
-        FacilityRouteCreateRequest request = new FacilityRouteCreateRequest();
-        request.setRouteCode(routeCode);
-        request.setOriginFacilityCode(origin);
-        request.setDestinationFacilityCode(destination);
-        request.setTransportMode(transportMode);
-        request.setPriorityLevel(0);
-        return request;
-    }
-
-    private FacilityTypeCreateRequest toTypeRequest(FacilityTypeEntity entity) {
-        FacilityTypeCreateRequest request = new FacilityTypeCreateRequest();
-        request.setCode(entity.getCode());
-        request.setName(entity.getName());
-        request.setDescription(entity.getDescription());
-        return request;
-    }
-
-    private FacilityCreateRequest toFacilityRequest(FacilityEntity entity) {
-        FacilityCreateRequest request = new FacilityCreateRequest();
-        request.setFacilityCode(entity.getFacilityCode());
-        request.setName(entity.getName());
-        request.setTypeCode(entity.getTypeCode());
-        request.setParentFacilityCode(entity.getParentFacilityCode());
-        request.setCountryCode(entity.getCountryCode());
-        request.setProvince(entity.getProvince());
-        request.setCity(entity.getCity());
-        request.setAddress(entity.getAddress());
-        request.setLatitude(entity.getLatitude());
-        request.setLongitude(entity.getLongitude());
-        return request;
-    }
-
-    private FacilityRouteCreateRequest toRouteRequest(FacilityRouteEntity entity) {
-        FacilityRouteCreateRequest request = new FacilityRouteCreateRequest();
-        request.setRouteCode(entity.getRouteCode());
-        request.setOriginFacilityCode(entity.getOriginFacilityCode());
-        request.setDestinationFacilityCode(entity.getDestinationFacilityCode());
-        request.setTransportMode(entity.getTransportMode());
-        request.setDistanceKm(entity.getDistanceKm());
-        request.setEstimatedHours(entity.getEstimatedHours());
-        request.setPriorityLevel(entity.getPriorityLevel());
-        return request;
     }
 
     private String resolveRouteDestinationCode(String destinationCode) {

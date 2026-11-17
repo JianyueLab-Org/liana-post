@@ -48,7 +48,4 @@ public interface OmsRepository {
     int receiveAndOpenMailPackage(String packageId, String currentFacilityCode);
     List<MailSlotSummaryResponse> findActiveSlots();
     MailSlotSealResponse sealMailSlot(String slotCode, String packageId, String destinationNode, String currentFacilityCode, String status);
-    boolean hasAnyData();
-    default void seedDefaults() {
-    }
 }

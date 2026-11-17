@@ -8,7 +8,6 @@
         </div>
         <div class="flex gap-2">
           <button class="btn btn-secondary" :disabled="loading" @click="loadUsers">刷新</button>
-          <button class="btn btn-primary" :disabled="loading" @click="runInit">初始化基础权限</button>
         </div>
       </div>
 
@@ -62,9 +61,6 @@
       </div>
     </DetailDrawer>
 
-    <DetailDrawer :open="initDrawerOpen" title="权限初始化结果" subtitle="角色与权限基础数据" @close="initDrawerOpen = false">
-      <pre class="whitespace-pre-wrap text-sm text-gray-700">{{ initResultText }}</pre>
-    </DetailDrawer>
   </div>
 </template>
 
@@ -81,8 +77,6 @@ const users = ref([]);
 const roles = ref([]);
 const current = ref(null);
 const drawerOpen = ref(false);
-const initDrawerOpen = ref(false);
-const initResult = ref(null);
 const statusOptions = ['1', '0'];
 const columns = [
   { key: 'username', label: '用户名' },
@@ -94,12 +88,11 @@ const columns = [
   { key: 'status', label: '状态' },
   { key: 'actions', label: '操作' },
 ];
-const form = reactive({ username: '', password: '123456', displayName: '', facilityCode: 'B1', roleCode: '' });
+const form = reactive({ username: '', password: '123456', displayName: '', facilityCode: session.user?.facilityCode || '', roleCode: '' });
 const resetForm = reactive({ username: '', newPassword: '123456' });
 
 const canCreate = computed(() => Boolean(form.username && form.password && form.displayName && form.facilityCode && form.roleCode));
 const currentPermissions = computed(() => current.value?.permissions || []);
-const initResultText = computed(() => (initResult.value ? JSON.stringify(initResult.value, null, 2) : ''));
 
 async function loadUsers() {
   loading.value = true;
@@ -155,17 +148,6 @@ async function resetPassword() {
   loading.value = true;
   try {
     await authApi.resetPassword({ username: resetForm.username, newPassword: resetForm.newPassword }, session.token);
-    await loadUsers();
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function runInit() {
-  loading.value = true;
-  try {
-    initResult.value = await authApi.initProject(session.token);
-    initDrawerOpen.value = true;
     await loadUsers();
   } finally {
     loading.value = false;

@@ -11,8 +11,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: ${POSTAGE_SQL_INIT_MODE:never}
-      schema-locations: classpath:schema.sql,classpath:retail-schema.sql,classpath:acceptance-schema.sql
+      mode: never
   jackson:
     deserialization:
       accept-float-as-int: false

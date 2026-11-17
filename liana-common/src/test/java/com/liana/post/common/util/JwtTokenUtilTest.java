@@ -81,7 +81,10 @@ public class JwtTokenUtilTest {
 
     @Test
     public void testValidateTamperedToken() {
-        String tamperedToken = validToken.substring(0, validToken.length() - 1) + "X";
+        // Change meaningful signature bits; the final base64url character contains padding bits.
+        int signatureStart = validToken.lastIndexOf('.') + 1;
+        char replacement = validToken.charAt(signatureStart) == 'A' ? 'B' : 'A';
+        String tamperedToken = validToken.substring(0, signatureStart) + replacement + validToken.substring(signatureStart + 1);
         assertFalse(JwtTokenUtil.validateToken(tamperedToken));
     }
 

@@ -96,11 +96,6 @@ public class TrackingServiceImpl implements TrackingService {
                 .stream().map(this::toResponse).toList();
     }
 
-    @Override
-    public void initDefaults() {
-        trackingRepository.seedDefaults();
-    }
-
     public List<TrackingEventResponse> listOmsCandidates(MailDispatchCandidateQueryRequest request) {
         Result<List<MailDispatchCandidateResponse>> result = omsClientProvider.getObject().listDispatchCandidates(request);
         if (result == null || result.getData() == null) {

@@ -22,16 +22,15 @@ public interface DispatchRepository {
     Optional<RouteRuleEntity> findBestRouteRule(String sourceFacilityCode, String targetFacilityCode, String routeScope, String destCountryCode);
     Optional<DispatchBagEntity> findDispatchBagById(Long id);
     Optional<DispatchBagEntity> findDispatchBagByBagNo(String bagNo);
+    Optional<DispatchBagEntity> lockDispatchBagByBagNo(String bagNo);
     DispatchBagEntity linkTransportTask(Long id, String transportTaskCode);
     Optional<DispatchBatchEntity> findDispatchBatchByBatchNo(String batchNo);
+    Optional<DispatchBatchEntity> lockDispatchBatchByBatchNo(String batchNo);
+    Optional<DispatchBatchEntity> lockDispatchBatchByBagNo(String bagNo);
     Optional<DispatchBatchEntity> findDispatchBatchByBagNo(String bagNo);
     Optional<HandoffRecordEntity> findHandoffRecordByHandoffNo(String handoffNo);
     Optional<HandoffRecordEntity> findHandoffRecordByBagNo(String bagNo);
     List<DispatchBagEntity> findAllDispatchBags();
     List<DispatchBatchEntity> findAllDispatchBatches();
     List<HandoffRecordEntity> findAllHandoffRecords();
-    int assignMailBagToWaybillNos(List<String> waybillNos, String bagNo, String currentFacilityCode);
-    boolean hasAnyData();
-    default void seedDefaults() {
-    }
 }

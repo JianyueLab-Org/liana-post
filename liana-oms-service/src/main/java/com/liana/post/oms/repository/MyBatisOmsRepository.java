@@ -59,6 +59,7 @@ public class MyBatisOmsRepository implements OmsRepository {
     private final CountryMapper countryMapper;
     private final ServiceTypeMapper serviceTypeMapper;
     private final CountryServiceTypeMapper countryServiceTypeMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public MyBatisOmsRepository(SenderMapper senderMapper,
                                 RecipientMapper recipientMapper,
@@ -66,7 +67,8 @@ public class MyBatisOmsRepository implements OmsRepository {
                                 MailMapper mailMapper,
                                 CountryMapper countryMapper,
                                 ServiceTypeMapper serviceTypeMapper,
-                                CountryServiceTypeMapper countryServiceTypeMapper) {
+                                CountryServiceTypeMapper countryServiceTypeMapper,
+                                org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.senderMapper = senderMapper;
         this.recipientMapper = recipientMapper;
         this.mailTypeMapper = mailTypeMapper;
@@ -74,6 +76,7 @@ public class MyBatisOmsRepository implements OmsRepository {
         this.countryMapper = countryMapper;
         this.serviceTypeMapper = serviceTypeMapper;
         this.countryServiceTypeMapper = countryServiceTypeMapper;
+        this.jdbc = jdbc;
     }
 
     @Override
@@ -362,9 +365,22 @@ public class MyBatisOmsRepository implements OmsRepository {
     @Override
     @Transactional
     public MailEntity assignMailBag(String waybillNo, String bagNo, String currentFacilityCode) {
-        MailEntity mail = findMailByWaybillNo(waybillNo).orElseThrow(() -> new BusinessException(404, "mail not found"));
+        MailEntity mail = mailMapper.selectOne(new LambdaQueryWrapper<MailEntity>()
+                .eq(MailEntity::getWaybillNo, normalize(waybillNo)).last("FOR UPDATE"));
+        if (mail == null) throw new BusinessException(404, "mail not found");
         if (StringUtils.hasText(bagNo)) {
-            String normalizedBagNo = bagNo.trim();
+            String normalizedBagNo = bagNo.trim().toUpperCase(java.util.Locale.ROOT);
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM oms_packing_inbox WHERE bag_no=?", Long.class, normalizedBagNo) > 0) {
+                throw new BusinessException(409, "confirmed dispatch packing cannot be edited through legacy assignment");
+            }
+            if ((StringUtils.hasText(mail.getBagNo()) && !normalizedBagNo.equals(mail.getBagNo()))
+                    || (StringUtils.hasText(mail.getPackageId()) && !normalizedBagNo.equals(mail.getPackageId()))) {
+                throw new BusinessException(409, "mail is already packed; open the original package before repacking");
+            }
+            if (StringUtils.hasText(currentFacilityCode) && !currentFacilityCode.trim().equalsIgnoreCase(mail.getCurrentFacilityCode())) {
+                throw new BusinessException(409, "mail is not at the requested packing facility");
+            }
+            if (normalizedBagNo.equals(mail.getBagNo()) && normalizedBagNo.equals(mail.getPackageId())) return mail;
             mail.setBagNo(normalizedBagNo);
             mail.setPackageId(normalizedBagNo);
             mail.setStatus(LogisticsConstants.MAIL_STATUS_DISPATCHED);
@@ -483,123 +499,6 @@ public class MyBatisOmsRepository implements OmsRepository {
         response.setDestinationNode(normalizedDestinationNode);
         response.setUpdatedCount(updated);
         return response;
-    }
-
-    @Override
-    public boolean hasAnyData() {
-        return senderMapper.selectCount(null) > 0
-                || recipientMapper.selectCount(null) > 0
-                || mailTypeMapper.selectCount(null) > 0
-                || countryMapper.selectCount(null) > 0
-                || serviceTypeMapper.selectCount(null) > 0
-                || mailMapper.selectCount(null) > 0;
-    }
-
-    @Override
-    @Transactional
-    public void seedDefaults() {
-        if (hasAnyData()) {
-            return;
-        }
-
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_PACKAGE, "PACKAGE", "package mail", 0));
-        saveMailType(createMailType("U", "信函", "letter with optional registration", 0));
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_REGISTERED, "REGISTERED", "registered mail", 1));
-        saveMailType(createMailType(LogisticsConstants.MAIL_TYPE_EMS, "EMS", "express mail", 1));
-
-        saveServiceType(createServiceType("AIR", "AIR", "air service", 1));
-        saveServiceType(createServiceType("SAL", "SAL", "surface air lifted", 1));
-        saveServiceType(createServiceType("SEA", "SEA", "sea service", 1));
-
-        saveCountry(createCountry("LN", "Liana", "Liana", 1, "OCEANIA", "default country"));
-        saveCountry(createCountry("HK", "Hong Kong", "Hong Kong", 1, "ASIA_PACIFIC", "postal enabled"));
-        saveCountry(createCountry("JP", "Japan", "Japan", 1, "ASIA_PACIFIC", "postal enabled"));
-        saveCountry(createCountry("US", "United States", "United States", 1, "NORTH_AMERICA", "postal enabled"));
-        saveCountry(createCountry("DE", "Germany", "Germany", 0, "EUROPE", "disabled example"));
-
-        linkCountryService("LN", "AIR", 1);
-        linkCountryService("LN", "SAL", 1);
-        linkCountryService("LN", "SEA", 1);
-        linkCountryService("HK", "AIR", 1);
-        linkCountryService("HK", "SAL", 1);
-        linkCountryService("HK", "SEA", 1);
-        linkCountryService("JP", "AIR", 1);
-        linkCountryService("JP", "SAL", 1);
-        linkCountryService("JP", "SEA", 1);
-        linkCountryService("US", "AIR", 1);
-        linkCountryService("US", "SAL", 1);
-        linkCountryService("US", "SEA", 1);
-        linkCountryService("DE", "AIR", 0);
-        linkCountryService("DE", "SAL", 0);
-        linkCountryService("DE", "SEA", 0);
-
-        SenderEntity sender = new SenderEntity();
-        sender.setFullName("Demo Sender");
-        sender.setPhone("0900123456");
-        sender.setAddress("A1 Plaza, Namoa");
-        sender.setPostcode("10001");
-        sender.setIdType("NID");
-        sender.setIdNumber("NID0001");
-        saveSender(sender);
-
-        RecipientEntity recipient = new RecipientEntity();
-        recipient.setFullName("Demo Recipient");
-        recipient.setPhone("0900654321");
-        recipient.setAddress("B1 Central, Namoa");
-        recipient.setPostcode("10002");
-        saveRecipient(recipient);
-
-        MailEntity mail = new MailEntity();
-        mail.setWaybillNo(UpuBarcodeUtil.generateRandom("CP"));
-        mail.setMailTypeCode(LogisticsConstants.MAIL_TYPE_REGISTERED);
-        mail.setServiceType("AIR");
-        mail.setMailScope("DOMESTIC");
-        mail.setSenderId(sender.getId());
-        mail.setRecipientId(recipient.getId());
-        mail.setOriginFacilityCode("B1");
-        mail.setCurrentFacilityCode("B1");
-        mail.setDestFacilityCode("C1");
-        mail.setWeightGrams(120);
-        mail.setDeclaredValue(BigDecimal.valueOf(0));
-        mail.setStatus(LogisticsConstants.MAIL_STATUS_CREATED);
-        saveMail(mail);
-    }
-
-    private MailTypeEntity createMailType(String code, String name, String description, Integer requiresSignature) {
-        MailTypeEntity entity = new MailTypeEntity();
-        entity.setCode(code);
-        entity.setName(name);
-        entity.setDescription(description);
-        entity.setRequiresSignature(requiresSignature);
-        return entity;
-    }
-
-    private ServiceTypeEntity createServiceType(String code, String name, String description, Integer enabled) {
-        ServiceTypeEntity entity = new ServiceTypeEntity();
-        entity.setCode(code);
-        entity.setName(name);
-        entity.setDescription(description);
-        entity.setEnabled(enabled);
-        return entity;
-    }
-
-    private CountryEntity createCountry(String code, String name, String englishName, Integer postalEnabled, String upuRegion, String remark) {
-        CountryEntity entity = new CountryEntity();
-        entity.setCode(code);
-        entity.setName(name);
-        entity.setEnglishName(englishName);
-        entity.setPostalEnabled(postalEnabled);
-        entity.setUpuRegion(upuRegion);
-        entity.setRemark(remark);
-        return entity;
-    }
-
-    private void linkCountryService(String countryCode, String serviceTypeCode, Integer enabled) {
-        CountryServiceTypeEntity entity = new CountryServiceTypeEntity();
-        entity.setCountryCode(countryCode);
-        entity.setServiceTypeCode(serviceTypeCode);
-        entity.setEnabled(enabled);
-        saveCountryServiceType(entity);
     }
 
     private void stamp(SenderEntity entity) {

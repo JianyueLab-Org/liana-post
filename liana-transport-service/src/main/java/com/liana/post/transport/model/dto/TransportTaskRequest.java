@@ -1,10 +1,8 @@
 package com.liana.post.transport.model.dto;
 
-import jakarta.validation.constraints.NotNull;
-
 public class TransportTaskRequest {
     private String taskCode;
-    @NotNull
+    private String manifestNo;
     private Long dispatchBagId;
     private Long assetId;
     private Long routeId;
@@ -12,6 +10,8 @@ public class TransportTaskRequest {
     private String status;
 
     public String getTaskCode() { return taskCode; }
+    public String getManifestNo() { return manifestNo; }
+    public void setManifestNo(String manifestNo) { this.manifestNo = manifestNo; }
     public void setTaskCode(String taskCode) { this.taskCode = taskCode; }
     public Long getDispatchBagId() { return dispatchBagId; }
     public void setDispatchBagId(Long dispatchBagId) { this.dispatchBagId = dispatchBagId; }

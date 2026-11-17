@@ -73,27 +73,6 @@ public class MyBatisTrackingRepository implements TrackingRepository {
         return trackingEventMapper.selectList(wrapper.orderByAsc(TrackingEventEntity::getEventTime));
     }
 
-    @Override
-    public boolean hasAnyData() {
-        return trackingEventMapper.selectCount(null) > 0;
-    }
-
-    @Override
-    @Transactional
-    public void seedDefaults() {
-        if (hasAnyData()) {
-            return;
-        }
-        TrackingEventEntity entity = new TrackingEventEntity();
-        entity.setWaybillNo(com.liana.post.common.util.UpuBarcodeUtil.generateRandom("CP"));
-        entity.setEventType(TrackingConstants.EVENT_ACCEPTED);
-        entity.setSourceService(TrackingConstants.SOURCE_OMS);
-        entity.setFacilityCode("B1");
-        entity.setFacilityName("Demo Facility");
-        entity.setPayload("{}");
-        save(entity);
-    }
-
     private String normalize(String value) {
         if (value == null || value.isBlank()) {
             throw new BusinessException(400, "waybillNo cannot be blank");

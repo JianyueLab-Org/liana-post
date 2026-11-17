@@ -5,7 +5,6 @@ import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
 import com.liana.post.tracking.model.dto.TrackingEventResponse;
 import com.liana.post.tracking.model.dto.TrackingQueryRequest;
 import com.liana.post.tracking.service.TrackingService;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,11 +34,6 @@ public class TrackingController {
         this.trackingService = trackingService;
         this.applicationName = applicationName;
         this.serverPort = serverPort;
-    }
-
-    @PostConstruct
-    public void init() {
-        trackingService.initDefaults();
     }
 
     @PostMapping("/events")

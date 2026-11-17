@@ -8,6 +8,12 @@ spring:
       config:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
         file-extension: yaml
+    openfeign:
+      client:
+        config:
+          transportDispatchClient:
+            connectTimeout: 4000
+            readTimeout: 10000
   config:
     import:
       - optional:nacos:application.yml
@@ -18,9 +24,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: ${TRANSPORT_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
-      schema-locations: classpath:schema.sql
-      data-locations: classpath:data.sql
+      mode: never
       continue-on-error: true
 mybatis-plus:
   configuration:

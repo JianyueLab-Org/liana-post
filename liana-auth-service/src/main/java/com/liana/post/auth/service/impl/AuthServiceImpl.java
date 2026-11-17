@@ -4,7 +4,6 @@ import com.liana.post.auth.constant.AuthConstants;
 import com.liana.post.auth.model.dto.LoginRequest;
 import com.liana.post.auth.model.dto.LoginResponse;
 import com.liana.post.auth.model.dto.PermissionResponse;
-import com.liana.post.auth.model.dto.ProjectInitResponse;
 import com.liana.post.auth.model.dto.RoleResponse;
 import com.liana.post.auth.model.dto.UserCreateRequest;
 import com.liana.post.auth.model.dto.UserProfileResponse;
@@ -138,95 +137,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public ProjectInitResponse initProject() {
-        List<String> createdRoles = new ArrayList<>();
-        List<String> skippedRoles = new ArrayList<>();
-        List<String> createdPermissions = new ArrayList<>();
-        List<String> skippedPermissions = new ArrayList<>();
-        List<String> createdUsers = new ArrayList<>();
-        List<String> skippedUsers = new ArrayList<>();
-
-        for (String[] roleDef : new String[][]{
-                {AuthConstants.ROLE_CLERK, "CLERK"},
-                {AuthConstants.ROLE_MANAGER, "MANAGER"},
-                {AuthConstants.ROLE_SORTER, "SORTER"},
-                {AuthConstants.ROLE_ADMIN, "ADMIN"}
-        }) {
-            if (authRepository.existsRoleByCode(roleDef[0])) {
-                skippedRoles.add(roleDef[0]);
-            } else {
-                RoleEntity role = new RoleEntity();
-                role.setCode(roleDef[0]);
-                role.setName(roleDef[1]);
-                role.setDescription(roleDef[1]);
-                role.setStatus(1);
-                role.setCreatedAt(LocalDateTime.now());
-                role.setUpdatedAt(LocalDateTime.now());
-                authRepository.saveRole(role);
-                createdRoles.add(roleDef[0]);
-            }
-        }
-
-        for (String[] permissionDef : new String[][]{
-                {"MAIL_CREATE", "MAIL_CREATE"},
-                {"MAIL_QUERY", "MAIL_QUERY"},
-                {"TRACK_QUERY", "TRACK_QUERY"},
-                {"TOKEN_ISSUE", "TOKEN_ISSUE"},
-                {"USER_ADMIN", "USER_ADMIN"},
-                {"ROLE_ADMIN", "ROLE_ADMIN"}
-        }) {
-            if (authRepository.existsPermissionByCode(permissionDef[0])) {
-                skippedPermissions.add(permissionDef[0]);
-            } else {
-                PermissionEntity permission = new PermissionEntity();
-                permission.setCode(permissionDef[0]);
-                permission.setName(permissionDef[1]);
-                permission.setDescription(permissionDef[1]);
-                permission.setStatus(1);
-                permission.setCreatedAt(LocalDateTime.now());
-                permission.setUpdatedAt(LocalDateTime.now());
-                authRepository.savePermission(permission);
-                createdPermissions.add(permissionDef[0]);
-            }
-        }
-
-        RoleEntity clerk = authRepository.findRoleByCode(AuthConstants.ROLE_CLERK).orElseThrow();
-        RoleEntity manager = authRepository.findRoleByCode(AuthConstants.ROLE_MANAGER).orElseThrow();
-        RoleEntity sorter = authRepository.findRoleByCode(AuthConstants.ROLE_SORTER).orElseThrow();
-        RoleEntity admin = authRepository.findRoleByCode(AuthConstants.ROLE_ADMIN).orElseThrow();
-
-        PermissionEntity mailCreate = authRepository.findPermissionByCode("MAIL_CREATE").orElseThrow();
-        PermissionEntity mailQuery = authRepository.findPermissionByCode("MAIL_QUERY").orElseThrow();
-        PermissionEntity trackQuery = authRepository.findPermissionByCode("TRACK_QUERY").orElseThrow();
-        PermissionEntity tokenIssue = authRepository.findPermissionByCode("TOKEN_ISSUE").orElseThrow();
-        PermissionEntity userAdmin = authRepository.findPermissionByCode("USER_ADMIN").orElseThrow();
-        PermissionEntity roleAdmin = authRepository.findPermissionByCode("ROLE_ADMIN").orElseThrow();
-
-        createdUsers.addAll(ensureUser("testclerk", clerk, "Test Clerk", "B1", List.of(mailCreate, mailQuery, trackQuery), skippedUsers));
-        createdUsers.addAll(ensureUser("testadmin", admin, "Test Admin", "A1", List.of(mailCreate, mailQuery, trackQuery, tokenIssue, userAdmin, roleAdmin), skippedUsers));
-        authRepository.saveUserRole(findUserId("testclerk"), clerk.getId());
-        authRepository.saveUserRole(findUserId("testadmin"), admin.getId());
-        authRepository.saveRolePermission(clerk.getId(), mailCreate.getId());
-        authRepository.saveRolePermission(clerk.getId(), mailQuery.getId());
-        authRepository.saveRolePermission(clerk.getId(), trackQuery.getId());
-        authRepository.saveRolePermission(admin.getId(), mailCreate.getId());
-        authRepository.saveRolePermission(admin.getId(), mailQuery.getId());
-        authRepository.saveRolePermission(admin.getId(), trackQuery.getId());
-        authRepository.saveRolePermission(admin.getId(), tokenIssue.getId());
-        authRepository.saveRolePermission(admin.getId(), userAdmin.getId());
-        authRepository.saveRolePermission(admin.getId(), roleAdmin.getId());
-
-        ProjectInitResponse response = new ProjectInitResponse();
-        response.setCreatedRoles(createdRoles);
-        response.setSkippedRoles(skippedRoles);
-        response.setCreatedPermissions(createdPermissions);
-        response.setSkippedPermissions(skippedPermissions);
-        response.setCreatedUsers(createdUsers);
-        response.setSkippedUsers(skippedUsers);
-        return response;
-    }
-
-    @Override
     public DashboardSummaryResponse dashboardSummary() {
         List<UserSummaryResponse> users = listUsers();
         List<RoleResponse> roles = listRoles();
@@ -258,36 +168,6 @@ public class AuthServiceImpl implements AuthService {
                 .stream()
                 .map(entry -> DashboardSummaryResponse.item(entry.getKey(), entry.getValue(), entry.getKey()))
                 .toList();
-    }
-
-    private List<String> ensureUser(String username,
-                                    RoleEntity role,
-                                    String displayName,
-                                    String facilityCode,
-                                    List<PermissionEntity> permissions,
-                                    List<String> skippedUsers) {
-        if (authRepository.existsUserByUsername(username)) {
-            skippedUsers.add(username);
-            return List.of();
-        }
-        UserEntity user = new UserEntity();
-        user.setUsername(username);
-        user.setPasswordHash(passwordEncoder.encode("123456"));
-        user.setDisplayName(displayName);
-        user.setFacilityCode(facilityCode);
-        user.setStatus(1);
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
-        authRepository.saveUser(user);
-        authRepository.saveUserRole(user.getId(), role.getId());
-        for (PermissionEntity permission : permissions) {
-            authRepository.saveRolePermission(role.getId(), permission.getId());
-        }
-        return List.of(username);
-    }
-
-    private Long findUserId(String username) {
-        return authRepository.findUserByUsername(username).map(UserEntity::getId).orElseThrow();
     }
 
     private String normalize(String value) {

@@ -36,3 +36,19 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Generated local/runtime files ###
+.env
+.env.*
+!.env.example
+!.env.demo.example
+.dist/
+**/node_modules/
+**/dist/
+**/__pycache__/
+*.pyc
+hs_err_pid*.log
+replay_pid*.log
+memory.txt
+x-ray/
+docs/~$*

@@ -19,7 +19,7 @@
 
 ## 数据库升级
 
-已有 OMS 数据库先执行 `db_revise/20261014_letter_additional_services.sql`，再部署 OMS。此迁移仅添加 `mail.additional_services` 与 U 产品，不改历史记录。迁移在已有库只执行一次；全新 Docker 初始化会自动运行 db_revise 目录。直接使用 OMS resources/schema.sql 初始化的新库已含字段，不再执行该迁移。
+已有 OMS 数据库先执行 `database/migrations/oms_db/V1__baseline.sql`，再部署 OMS。此迁移仅添加 `mail.additional_services` 与 U 产品，不改历史记录。迁移在已有库只执行一次；全新 Docker 初始化会自动运行 db_revise 目录。直接使用 OMS resources/schema.sql 初始化的新库已含字段，不再执行该迁移。
 
 ## 验证
 

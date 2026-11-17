@@ -3,7 +3,7 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h3 class="card-title">建袋作业</h3>
-        <p class="mt-2 text-sm text-gray-500">按邮件类型和国内/国际范围建袋，国际邮件需按寄达国分别成袋。</p>
+        <p class="mt-2 text-sm text-gray-500">按邮件类型和国内/国际范围建袋，国际邮件需按寄达国分别成袋。创建后清单固定，装包确认状态请到邮袋管理刷新查看。</p>
       </div>
       <button class="btn btn-secondary" type="button" :disabled="loadingSummary" @click="refreshAll">
         {{ loadingSummary ? '刷新中...' : '刷新' }}
@@ -290,8 +290,8 @@ async function submit() {
     }
     const payload = await dispatchApi.createBag(request, session.token);
 
-    result.value = JSON.stringify(payload, null, 2);
     await refreshAll();
+    result.value = `总包 ${payload.bagNo} 已创建，正在等待装包确认。确认后可编批；请到邮袋管理刷新查看。`;
   } catch (error) {
     result.value = `创建总包失败：${error.message}`;
   } finally {

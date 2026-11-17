@@ -48,6 +48,4 @@ public interface TransportRepository {
     Optional<TransportAssetEntity> findAssetById(Long id);
     PageResult<TransportTaskEntity> pageTasks(long page, long pageSize, String keyword, String status);
 
-    boolean hasAnyData();
-    void seedDefaults();
 }

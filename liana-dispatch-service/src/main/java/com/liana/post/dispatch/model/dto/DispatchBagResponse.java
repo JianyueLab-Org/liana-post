@@ -16,6 +16,33 @@ public class DispatchBagResponse {
     private List<String> mailNoList;
     private Integer mailCount;
     private Integer totalWeightGrams;
+    private Integer packingVersion;
+    private String packingSyncStatus;
+    private String packingError;
+    private String weightSource;
+    private String manifestNo;
+    private String manifestBatchStatus;
+    private String currentSourceOrgCode;
+    private String currentDestinationOrgCode;
+
+    public String getCurrentSourceOrgCode() { return currentSourceOrgCode; }
+    public void setCurrentSourceOrgCode(String value) { currentSourceOrgCode = value; }
+    public String getCurrentDestinationOrgCode() { return currentDestinationOrgCode; }
+    public void setCurrentDestinationOrgCode(String value) { currentDestinationOrgCode = value; }
+
+    public String getManifestNo() { return manifestNo; }
+    public void setManifestNo(String value) { manifestNo = value; }
+    public String getManifestBatchStatus() { return manifestBatchStatus; }
+    public void setManifestBatchStatus(String value) { manifestBatchStatus = value; }
+
+    public Integer getPackingVersion() { return packingVersion; }
+    public void setPackingVersion(Integer value) { packingVersion = value; }
+    public String getPackingSyncStatus() { return packingSyncStatus; }
+    public void setPackingSyncStatus(String value) { packingSyncStatus = value; }
+    public String getPackingError() { return packingError; }
+    public void setPackingError(String value) { packingError = value; }
+    public String getWeightSource() { return weightSource; }
+    public void setWeightSource(String value) { weightSource = value; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

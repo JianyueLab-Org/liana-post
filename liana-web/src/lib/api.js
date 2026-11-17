@@ -141,6 +141,12 @@ export const dispatchApi = {
   approveBatch(batchNo, payload, token) {
     return request('dispatch', `/api/dispatch/batches/${encodeURIComponent(batchNo)}/approve`, { method: 'POST', body: payload, token });
   },
+  sealBatch(batchNo, token) {
+    return request('dispatch', `/api/dispatch/batches/${encodeURIComponent(batchNo)}/seal`, { method: 'POST', token });
+  },
+  cancelBatch(batchNo, payload, token) {
+    return request('dispatch', `/api/dispatch/batches/${encodeURIComponent(batchNo)}/cancel`, { method: 'POST', body: payload, token });
+  },
   createHandoff(payload, token) {
     return request('dispatch', '/api/dispatch/handoffs', { method: 'POST', body: payload, token });
   },
@@ -159,6 +165,33 @@ export const dispatchApi = {
 };
 
 export const sortingApi = {
+  getManifestClosure(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/closure`, { token });
+  },
+  finishManifestCheck(manifestNo, payload, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/finish-check`, { method: 'POST', body: payload, token });
+  },
+  closeManifest(manifestNo, payload, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/close`, { method: 'POST', body: payload, token });
+  },
+  forward(payload, token) {
+    return request('sorting', '/api/v1/sorting/forwarding', { method: 'POST', body: payload, token });
+  },
+  listForwarding(facilityCode, token) {
+    return request('sorting', '/api/v1/sorting/forwarding', { query: { facilityCode }, token }).then(unwrapList);
+  },
+  forwardingCandidates(facilityCode, token) {
+    return request('sorting', '/api/v1/sorting/forwarding/candidates', { query: { facilityCode }, token }).then(unwrapList);
+  },
+  getBagReceipts(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/bag-receipts`, { token }).then(unwrapList);
+  },
+  getManifestCancel(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/cancel-receipt`, { token });
+  },
+  getManifestSeal(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/seal-receipt`, { token });
+  },
   listPackages(token) {
     return request('sorting', '/api/v1/sorting/packages', { token }).then(unwrapList);
   },
@@ -167,6 +200,9 @@ export const sortingApi = {
   },
   getManifest(manifestNo, token) {
     return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}`, { token });
+  },
+  getManifestVersions(manifestNo, token) {
+    return request('sorting', `/api/v1/sorting/manifests/${encodeURIComponent(manifestNo)}/versions`, { token }).then(unwrapList);
   },
   listLines(packageNo, token) {
     return request('sorting', '/api/v1/sorting/lines', { query: { packageNo }, token }).then(unwrapList);
@@ -183,11 +219,17 @@ export const sortingApi = {
   listDiscrepancies(packageNo, token) {
     return request('sorting', '/api/v1/sorting/discrepancies', { query: { packageNo }, token }).then(unwrapList);
   },
+  disposeDiscrepancy(verificationNo, payload, token) {
+    return request('sorting', `/api/v1/sorting/discrepancies/${encodeURIComponent(verificationNo)}/disposition`, { method: 'POST', body: payload, token });
+  },
   receive(payload, token) {
     return request('sorting', '/api/v1/sorting/receive', { method: 'POST', body: payload, token });
   },
   unpackItem(payload, token) {
     return request('sorting', '/api/v1/sorting/unpack-item', { method: 'POST', body: payload, token });
+  },
+  unpackReceipt(requestNo, token) {
+    return request('sorting', `/api/v1/sorting/unpack-requests/${encodeURIComponent(requestNo)}`, { token });
   },
   previewUnpackItems(params, token) {
     return request('sorting', '/api/v1/sorting/unpack-preview', { query: params, token });
@@ -203,6 +245,9 @@ export const sortingApi = {
   },
   sealBagBySlot(payload, token) {
     return request('sorting', '/api/v1/sorting/slots/seal', { method: 'POST', body: payload, token });
+  },
+  repackingReceipt(requestNo, token) {
+    return request('sorting', `/api/v1/sorting/repack-requests/${encodeURIComponent(requestNo)}`, { token });
   },
   listCountrySlots(token, stationCode) {
     return request('sorting', '/api/v1/sorting/country-slots', { query: { stationCode }, token }).then(unwrapList);
@@ -234,6 +279,9 @@ export const trackingApi = {
 };
 
 export const transportApi = {
+  addManifest(taskCode, manifestNo, token) {
+    return request('transport', `/api/transport/tasks/${encodeURIComponent(taskCode)}/manifests`, { method: 'POST', body: { manifestNo }, token });
+  },
   listAssets(params, token) {
     return request('transport', '/api/transport/assets', { query: params, token });
   },

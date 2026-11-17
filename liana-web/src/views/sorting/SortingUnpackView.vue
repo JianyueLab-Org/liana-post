@@ -16,7 +16,7 @@
             <button
               type="button"
               class="btn btn-secondary"
-              :disabled="loadingPackages || packageScanning || !remainingPackages.length"
+              :disabled="!!pendingSubmission || submitting || loadingPackages || packageScanning || !remainingPackages.length"
               @click="scanPackage"
             >
               {{ packageScanning ? '扫描中...' : '扫描下一个总包' }}
@@ -54,6 +54,7 @@
           <div class="mt-3 flex gap-2">
             <input
               v-model="itemScanInput"
+              :disabled="!!pendingSubmission || submitting"
               class="input flex-1"
               :class="{ 'scanner-flash': itemScanning }"
               placeholder="扫描或输入邮件条码"
@@ -62,7 +63,7 @@
             <button
               type="button"
               class="btn btn-primary"
-              :disabled="itemScanning || !form.packageNo"
+              :disabled="!!pendingSubmission || submitting || itemScanning || !form.packageNo"
               @click="scanItem"
             >
               {{ itemScanning ? '扫描中...' : '扫' }}
@@ -74,11 +75,9 @@
         </section>
 
         <div class="grid gap-3 md:grid-cols-2">
-          <input v-model="form.manifestNo" class="input" placeholder="电子路单号（可选）" />
-          <select v-model="form.scanMode" class="select">
+          <input v-model="form.manifestNo" class="input" placeholder="电子路单号" readonly />
+          <select v-model="form.scanMode" class="select" disabled>
             <option value="PREALERT">有预告</option>
-            <option value="BLIND">无预告</option>
-            <option value="FORCE">强制开拆</option>
           </select>
         </div>
 
@@ -93,6 +92,7 @@
               :key="item"
               type="button"
               class="rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+              :disabled="!!pendingSubmission || submitting"
               @click="removeItem(item)"
             >
               {{ item }} ×
@@ -101,14 +101,24 @@
           </div>
         </section>
 
-        <button class="btn btn-primary w-full" :disabled="submitting || !canSubmit">
-          {{ submitting ? '提交中...' : '提交开拆' }}
+        <label v-if="!itemNos.length" class="flex gap-2 text-sm text-gray-700">
+          <input v-model="confirmEmpty" type="checkbox" :disabled="!!pendingSubmission || submitting" />
+          确认本次未扫到任何邮件，结束开拆并登记全部缺件
+        </label>
+        <p v-if="pendingSubmission" class="text-sm text-amber-700">提交内容已保存。网络异常后请重试原请求，刷新页面也可恢复。</p>
+        <button class="btn btn-primary w-full" :disabled="submitting || itemScanning || packageScanning || !canSubmit">
+          {{ submitting ? '提交中...' : pendingSubmission ? '重试原开拆请求' : '完成开拆' }}
         </button>
       </form>
     </div>
 
     <div class="card p-5">
       <h3 class="card-title">结果</h3>
+      <div v-if="lastRequestNo" class="mt-3 text-sm text-gray-600">
+        <div>开拆请求：{{ lastRequestNo }}</div>
+        <div>邮件归属确认：{{ confirmationLabel }}</div>
+        <button type="button" class="btn btn-secondary mt-2" @click="refreshConfirmation">刷新确认状态</button>
+      </div>
       <button v-if="canRoute" type="button" class="btn btn-primary mt-4" @click="goRoute">
         去自动路由计算
       </button>
@@ -139,7 +149,19 @@ const packageQueue = ref([]);
 const consumedPackageNos = ref([]);
 const selectedManifestDetail = ref(null);
 const canRoute = ref(false);
-let unpackScanSequence = 0;
+const confirmEmpty = ref(false);
+const storageKey = `sorting-unpack:${session.user?.userId || session.user?.username || ''}:${session.user?.facilityCode || ''}`;
+const pendingSubmission = ref(null);
+const lastRequestNo = ref('');
+const confirmationStatus = ref('');
+const confirmationLabel = computed(() => ({
+  PENDING: '等待 OMS 确认', SENDING: '正在确认', RETRY: '等待自动重试',
+  SENT: '已确认，可继续路由', CONFLICT: '归属冲突，需核查；未开放后续处理',
+}[confirmationStatus.value] || '尚未查询'));
+
+function persistSubmission() {
+  sessionStorage.setItem(storageKey, JSON.stringify({ pending: pendingSubmission.value, lastRequestNo: lastRequestNo.value }));
+}
 
 const form = reactive({
   stationCode: session.user?.facilityCode || '',
@@ -152,7 +174,7 @@ const form = reactive({
 const remainingPackages = computed(() => packageQueue.value.filter((item) => !consumedPackageNos.value.includes(item.packageNo)));
 const remainingItems = computed(() => pendingItems.value.filter((item) => !itemNos.value.includes(item)));
 const nextPendingItem = computed(() => remainingItems.value[0] || '');
-const canSubmit = computed(() => Boolean(form.stationCode && form.packageNo && itemNos.value.length));
+const canSubmit = computed(() => Boolean(pendingSubmission.value || (form.stationCode && form.packageNo && form.manifestNo && (itemNos.value.length || confirmEmpty.value))));
 
 function normalize(value) {
   return String(value || '').trim().toUpperCase();
@@ -219,7 +241,7 @@ async function loadPackages() {
   try {
     const packages = await sortingApi.listPackages(session.token);
     packageQueue.value = packages
-      .filter((item) => String(item.packageStatus || '').toUpperCase() !== 'OPENED')
+      .filter((item) => String(item.packageStatus || '').toUpperCase() === 'RECEIVED')
       .map((item) => ({
         ...item,
         packageNo: normalize(item.packageNo),
@@ -270,7 +292,7 @@ async function loadPendingItemsByManifest(manifestNo, packageNo) {
 }
 
 async function scanPackage() {
-  if (packageScanning.value || loadingPackages.value) {
+  if (pendingSubmission.value || submitting.value || packageScanning.value || loadingPackages.value) {
     return;
   }
   const nextPackage = remainingPackages.value[0];
@@ -280,6 +302,7 @@ async function scanPackage() {
   }
   await animateScan(packageScanPreview, nextPackage.packageNo, packageScanning);
   form.packageNo = nextPackage.packageNo;
+  confirmEmpty.value = false;
   form.manifestNo = nextPackage.manifestNo || form.manifestNo;
   consumedPackageNos.value = [...consumedPackageNos.value, nextPackage.packageNo];
   await loadPendingItemsByManifest(form.manifestNo, nextPackage.packageNo);
@@ -288,7 +311,7 @@ async function scanPackage() {
 }
 
 async function scanItem() {
-  if (itemScanning.value) {
+  if (pendingSubmission.value || submitting.value || itemScanning.value) {
     return;
   }
   if (!form.packageNo) {
@@ -311,11 +334,6 @@ async function scanItem() {
   }
 
   code = normalize(code);
-  if (pendingItems.value.length && !remainingItems.value.includes(code)) {
-    result.value = `邮件 ${code} 不在当前总包候选列表中。`;
-    itemScanInput.value = '';
-    return;
-  }
   if (itemNos.value.includes(code)) {
     result.value = `邮件 ${code} 已扫描。`;
     itemScanInput.value = '';
@@ -326,10 +344,11 @@ async function scanItem() {
   itemNos.value.push(code);
   itemScanInput.value = '';
   preloadNextItem();
-  result.value = `已扫描邮件 ${code}`;
+  result.value = pendingItems.value.includes(code) ? `已扫描邮件 ${code}` : `已扫描预期外邮件 ${code}，完成后登记盈余并隔离。`;
 }
 
 function removeItem(code) {
+  if (pendingSubmission.value || submitting.value) return;
   itemNos.value = itemNos.value.filter((item) => item !== code);
 }
 
@@ -340,21 +359,31 @@ async function submit() {
   }
   submitting.value = true;
   try {
-    const payload = await sortingApi.unpackItem({
+    if (!pendingSubmission.value) {
+      const requestNo = `UNPACK-${crypto.randomUUID()}`.toUpperCase();
+      pendingSubmission.value = {
       stationCode: form.stationCode,
       packageNo: form.packageNo,
       manifestNo: form.manifestNo || null,
       scanMode: form.scanMode,
       operatorId: form.operatorId || null,
       deviceId: 'WEB-UI',
-      scanBatchNo: `BATCH-${Date.now()}-${++unpackScanSequence}`,
-      idempotencyKey: `unpack-${Date.now()}-${unpackScanSequence}`,
+      scanBatchNo: requestNo,
+      idempotencyKey: requestNo,
       items: itemNos.value.map((itemNo) => ({ itemNo })),
-    }, session.token);
+      };
+      persistSubmission();
+    }
+    const submitted = pendingSubmission.value;
+    const payload = await sortingApi.unpackItem(submitted, session.token);
+    lastRequestNo.value = submitted.idempotencyKey;
+    pendingSubmission.value = null;
+    persistSubmission();
     result.value = JSON.stringify(payload, null, 2);
-    canRoute.value = true;
+    await refreshConfirmation();
     itemNos.value = [];
-    consumedPackageNos.value = [...consumedPackageNos.value, form.packageNo];
+    confirmEmpty.value = false;
+    consumedPackageNos.value = [...consumedPackageNos.value, submitted.packageNo];
     await loadPackages();
   } catch (error) {
     result.value = error.message;
@@ -364,12 +393,36 @@ async function submit() {
   }
 }
 
+async function refreshConfirmation() {
+  if (!lastRequestNo.value) return;
+  try {
+    const receipt = await sortingApi.unpackReceipt(lastRequestNo.value, session.token);
+    confirmationStatus.value = receipt.status;
+    canRoute.value = receipt.status === 'SENT';
+    if (receipt.lastError) result.value = receipt.lastError;
+  } catch (error) {
+    canRoute.value = false;
+    result.value = `开拆已保存，确认状态查询失败：${error.message}`;
+  }
+}
+
 function goRoute() {
   router.push('/sorting/route');
 }
 
 onMounted(async () => {
-  await loadPackages();
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    pendingSubmission.value = saved?.pending || null;
+    lastRequestNo.value = saved?.lastRequestNo || '';
+  } catch { sessionStorage.removeItem(storageKey); }
+  if (pendingSubmission.value) {
+    Object.assign(form, pendingSubmission.value);
+    itemNos.value = pendingSubmission.value.items.map((item) => item.itemNo);
+    confirmEmpty.value = !itemNos.value.length;
+    packageScanPreview.value = form.packageNo;
+  } else await loadPackages();
+  await refreshConfirmation();
 });
 </script>
 

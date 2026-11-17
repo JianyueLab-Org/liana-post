@@ -1,0 +1,38 @@
+# Dedicated verification environment. Never overlays docker-compose.demo.yml.
+name: liana-database-verify
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${LIANA_DB_PASSWORD:?Set a dedicated verification password}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${LIANA_VERIFY_MYSQL_PORT:-13317}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --skip-name-resolve
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -uroot --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  database-init:
+    build:
+      context: ..
+      dockerfile: database/Dockerfile
+    image: liana-post/database-init:verify
+    environment:
+      LIANA_DB_HOST: mysql
+      LIANA_DB_PORT: 3306
+      LIANA_DB_USER: root
+      LIANA_DB_PASSWORD: ${LIANA_DB_PASSWORD:?Set a dedicated verification password}
+      LIANA_DEMO_PASSWORD: ${LIANA_DEMO_PASSWORD:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["migrate"]

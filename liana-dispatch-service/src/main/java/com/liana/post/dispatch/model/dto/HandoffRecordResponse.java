@@ -3,6 +3,10 @@ package com.liana.post.dispatch.model.dto;
 public class HandoffRecordResponse {
     private Long id;
     private String handoffNo;
+    private String batchNo;
+
+    public String getBatchNo() { return batchNo; }
+    public void setBatchNo(String value) { batchNo = value; }
     private String bagNo;
     private String fromFacilityCode;
     private String toFacilityCode;

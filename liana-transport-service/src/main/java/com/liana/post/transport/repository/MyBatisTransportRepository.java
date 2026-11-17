@@ -220,7 +220,7 @@ public class MyBatisTransportRepository implements TransportRepository {
         if (entity.getStatus() == null || entity.getStatus().isBlank()) {
             entity.setStatus(TransportConstants.TASK_STATUS_CREATED);
         }
-        entity.setCreatedAt(LocalDateTime.now());
+        entity.setCreatedAt(LocalDateTime.now(java.time.ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
         if (taskMapper.insert(entity) <= 0) throw new BusinessException(500, "failed to save transport task");
         return entity;
     }
@@ -316,29 +316,6 @@ public class MyBatisTransportRepository implements TransportRepository {
         }
         Page<TransportTaskEntity> result = taskMapper.selectPage(new Page<>(Math.max(page, 1), Math.max(pageSize, 1)), wrapper.orderByDesc(TransportTaskEntity::getCreatedAt));
         return new PageResult<>(result.getCurrent(), result.getSize(), result.getTotal(), result.getRecords());
-    }
-
-    @Override
-    public boolean hasAnyData() {
-        return assetMapper.selectCount(null) > 0
-                || routeMapper.selectCount(null) > 0
-                || scheduleMapper.selectCount(null) > 0
-                || taskMapper.selectCount(null) > 0;
-    }
-
-    @Override
-    @Transactional
-    public void seedDefaults() {
-        if (hasAnyData()) {
-            return;
-        }
-        TransportAssetEntity asset = new TransportAssetEntity();
-        asset.setCode("T-001");
-        asset.setName("Post Truck 12");
-        asset.setType(TransportConstants.TYPE_TRUCK);
-        asset.setCapacity(new java.math.BigDecimal("80"));
-        asset.setStatus(TransportConstants.STATUS_AVAILABLE);
-        saveAsset(asset);
     }
 
     private void stamp(TransportAssetEntity entity) {

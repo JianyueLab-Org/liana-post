@@ -115,6 +115,12 @@ public class MyBatisSortingRepository implements SortingRepository {
     }
 
     @Override
+    public Optional<SortingManifestEntity> lockManifestByNo(String manifestNo) {
+        return Optional.ofNullable(manifestMapper.selectOne(new LambdaQueryWrapper<SortingManifestEntity>()
+                .eq(SortingManifestEntity::getManifestNo, normalize(manifestNo)).last("FOR UPDATE")));
+    }
+
+    @Override
     public List<SortingManifestItemEntity> findManifestItems(String manifestNo) {
         return manifestItemMapper.selectList(new LambdaQueryWrapper<SortingManifestItemEntity>()
                 .eq(SortingManifestItemEntity::getManifestNo, normalize(manifestNo)));
@@ -122,25 +128,25 @@ public class MyBatisSortingRepository implements SortingRepository {
 
     @Override
     public Optional<SortingManifestEntity> findManifestByExpectedPackageNo(String packageNo) {
-        List<String> manifestNos = manifestItemMapper.selectList(new LambdaQueryWrapper<SortingManifestItemEntity>()
+        java.util.Set<String> manifestNos = new java.util.LinkedHashSet<>();
+        manifestPackageMapper.selectList(new LambdaQueryWrapper<SortingManifestPackageEntity>()
+                        .eq(SortingManifestPackageEntity::getPackageNo, normalize(packageNo)))
+                .stream().map(SortingManifestPackageEntity::getManifestNo).filter(StringUtils::hasText).forEach(manifestNos::add);
+        manifestItemMapper.selectList(new LambdaQueryWrapper<SortingManifestItemEntity>()
                         .eq(SortingManifestItemEntity::getExpectedPackageNo, normalize(packageNo)))
-                .stream()
-                .map(SortingManifestItemEntity::getManifestNo)
-                .filter(StringUtils::hasText)
-                .map(value -> value.trim().toUpperCase())
-                .distinct()
+                .stream().map(SortingManifestItemEntity::getManifestNo).filter(StringUtils::hasText).forEach(manifestNos::add);
+        List<SortingManifestEntity> candidates = manifestNos.stream().map(this::findManifestByNo)
+                .flatMap(Optional::stream)
+                .filter(manifest -> !java.util.Set.of("CLOSED", "CANCELLED").contains(manifest.getManifestStatus()))
                 .toList();
-        if (manifestNos.isEmpty()) {
-            SortingManifestPackageEntity manifestPackage = manifestPackageMapper.selectOne(
-                    new LambdaQueryWrapper<SortingManifestPackageEntity>()
-                            .eq(SortingManifestPackageEntity::getPackageNo, normalize(packageNo))
-                            .last("LIMIT 1"));
-            return manifestPackage == null
-                    ? Optional.empty()
-                    : findManifestByNo(manifestPackage.getManifestNo());
+        if (candidates.size() > 1) {
+            throw new BusinessException(409, "package belongs to multiple handoffs; provide an explicit manifest number");
         }
-        return Optional.ofNullable(manifestMapper.selectOne(new LambdaQueryWrapper<SortingManifestEntity>()
-                .eq(SortingManifestEntity::getManifestNo, manifestNos.get(0))));
+        if (candidates.isEmpty() && manifestNos.stream().map(this::findManifestByNo).flatMap(Optional::stream)
+                .anyMatch(manifest -> "CANCELLED".equals(manifest.getManifestStatus()))) {
+            throw new BusinessException(409, "package only has cancelled manifests; provide a new valid handoff instead of blind fallback");
+        }
+        return candidates.stream().findFirst();
     }
 
     @Override
@@ -291,32 +297,6 @@ public class MyBatisSortingRepository implements SortingRepository {
     @Override
     public List<DiscrepancyVerificationEntity> findAllDiscrepancies() {
         return discrepancyVerificationMapper.selectList(null);
-    }
-
-    @Override
-    public boolean hasAnyData() {
-        return totalPackageMapper.selectCount(null) > 0
-                || manifestMapper.selectCount(null) > 0
-                || manifestPackageMapper.selectCount(null) > 0
-                || manifestItemMapper.selectCount(null) > 0
-                || packageItemLineMapper.selectCount(null) > 0
-                || discrepancyVerificationMapper.selectCount(null) > 0;
-    }
-
-    @Override
-    @Transactional
-    public void seedDefaults() {
-        if (hasAnyData()) {
-            return;
-        }
-        SortingTotalPackageEntity totalPackage = new SortingTotalPackageEntity();
-        totalPackage.setPackageNo("PKG202606140001");
-        totalPackage.setPackageLevel(SortingConstants.PACKAGE_LEVEL_TRANSIT);
-        totalPackage.setPackageStatus(SortingConstants.PACKAGE_STATUS_SEALED);
-        totalPackage.setSourceOrgCode("B1");
-        totalPackage.setDestinationOrgCode("C1");
-        totalPackage.setPrealertFlag(1);
-        saveTotalPackage(totalPackage);
     }
 
     private void stamp(SortingTotalPackageEntity entity) {

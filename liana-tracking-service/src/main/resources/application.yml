@@ -17,8 +17,7 @@ spring:
       database: ${REDIS_DB:0}
   sql:
     init:
-      mode: ${TRACKING_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
-      schema-locations: ${TRACKING_SQL_SCHEMA_LOCATIONS:file:${user.dir}/db/tracking_db.sql}
+      mode: never
   cloud:
     nacos:
       discovery:

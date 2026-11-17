@@ -13,7 +13,6 @@ import com.liana.post.transport.model.entity.TransportRouteEntity;
 import com.liana.post.transport.model.entity.TransportScheduleEntity;
 import com.liana.post.transport.model.entity.TransportTaskEntity;
 import com.liana.post.transport.service.TransportService;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,14 +20,16 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/transport")
 public class TransportController {
     private final TransportService transportService;
+    private final com.liana.post.transport.service.ManifestAssignmentService assignments;
 
-    public TransportController(TransportService transportService) {
+    public TransportController(TransportService transportService, com.liana.post.transport.service.ManifestAssignmentService assignments) {
         this.transportService = transportService;
+        this.assignments = assignments;
     }
 
-    @PostConstruct
-    public void init() {
-        transportService.initDefaults();
+    @PostMapping("/tasks/{taskCode}/manifests")
+    public Result<TransportTaskEntity> addManifest(@PathVariable("taskCode") String taskCode, @RequestBody TransportTaskRequest request) {
+        return Result.ok(assignments.add(taskCode, request.getManifestNo()));
     }
 
     @PostMapping("/assets")

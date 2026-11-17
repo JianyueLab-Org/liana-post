@@ -25,7 +25,6 @@ import com.liana.post.oms.model.dto.ServiceTypeResponse;
 import com.liana.post.oms.repository.OmsRepository;
 import com.liana.post.oms.service.OmsService;
 import com.liana.post.oms.util.OmsMapper;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,11 +49,6 @@ public class OmsController {
     public OmsController(OmsService omsService, OmsRepository omsRepository) {
         this.omsService = omsService;
         this.omsRepository = omsRepository;
-    }
-
-    @PostConstruct
-    public void init() {
-        omsService.initDefaults();
     }
 
     @PostMapping("/mails")

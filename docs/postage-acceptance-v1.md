@@ -49,9 +49,9 @@ OMS 网关前缀 `/liana-oms-service`，业务路径 `/api/oms/acceptances/valid
 已有 MySQL 环境分别执行：
 
 - postage_db：`liana-postage-service/src/main/resources/acceptance-schema.sql`（须先具备资费、零售表）。新增预占锁、结算及邮票关系三张表。
-- oms_db：`db_revise/20261014_postage_acceptance.sql`。新增 OMS 幂等台账。也可在 oms_db 执行 `liana-oms-service/src/main/resources/acceptance-schema.sql`。
+- oms_db：`db_revise/20261014_postage_acceptance.sql`。新增 OMS 幂等台账。也可在 oms_db 执行 `database/migrations/oms_db/V4__unpacking_confirmation_inbox.sql`。
 
-均为可重复执行的加表 SQL，不清库、不改历史邮件。Docker 新建环境及 postage-db-init 已包含邮资新增表；已有 OMS 数据卷需要单独执行 OMS 升级 SQL。随后同时升级邮资、OMS、liana-web，升级期间暂停柜台收寄。运行时已有资费不被种子覆盖。
+均为可重复执行的加表 SQL，不清库、不改历史邮件。Docker 新建环境及 database-init 已包含邮资新增表；已有 OMS 数据卷需要单独执行 OMS 升级 SQL。随后同时升级邮资、OMS、liana-web，升级期间暂停柜台收寄。运行时已有资费不被种子覆盖。
 
 OMS 轨迹 ACCEPTED 与缓存清理改为邮件事务提交后触发，避免回滚邮件产生已收寄轨迹。轨迹仍沿用现有尽力发送机制，没有可靠消息台账；轨迹服务失败需要后续查询与补录，不能承诺必达。已核销邮件的撤销、退款、重新发行、批量结算及线上支付不在本轮范围内。
 

@@ -2,7 +2,7 @@
   <div class="grid-two">
     <div class="card p-5">
       <h3 class="card-title">交接确认</h3>
-      <p class="mt-2 text-sm text-gray-500">从当前机构已形成且未发出的总包里选择，接收机构会显示编码和名称。</p>
+      <p class="mt-2 text-sm text-gray-500">先在批次管理生成路单并申请封单，封单获确认后，再选择本机构未发出的总包交接。接收机构显示编码和名称。</p>
       <div class="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-gray-700">
         当前机构：<span class="font-medium text-gray-900">{{ currentFacilityLabel }}</span>
       </div>
@@ -43,6 +43,7 @@ const session = useSessionStore();
 const result = ref('');
 const submitting = ref(false);
 const bags = ref([]);
+const batches = ref([]);
 const handoffs = ref([]);
 const routes = ref([]);
 const facilities = ref([]);
@@ -52,17 +53,24 @@ const currentFacilityCode = computed(() => session.user?.facilityCode || '');
 const currentFacilityLabel = computed(() => facilityLabel(currentFacilityCode.value));
 const selectedBag = computed(() => bags.value.find((item) => item.bagNo === form.bagNo) || null);
 const handedOffBagNos = computed(() => new Set(handoffs.value
-  .filter((item) => item.status === 'COMPLETED')
+  .filter((item) => item.status === 'COMPLETED' && batches.value.some(batch => batch.batchNo === item.batchNo
+    && bags.value.some(bag => bag.bagNo === item.bagNo && bag.manifestNo === batch.manifestNo)))
   .map((item) => item.bagNo)
   .filter(Boolean)));
 const availableBags = computed(() => bags.value.filter((item) =>
-  item.originFacilityCode === currentFacilityCode.value
-  && item.status !== 'DISPATCHED'
+  (item.currentSourceOrgCode || item.originFacilityCode) === currentFacilityCode.value
+  && item.packingSyncStatus === 'CONFIRMED'
+  && sealedBagNos.value.has(item.bagNo)
+  && ['CREATED', 'REVIEWED'].includes(item.status)
   && !handedOffBagNos.value.has(item.bagNo)));
+const sealedBagNos = computed(() => new Set(batches.value
+  .filter((batch) => batch.manifestSyncStatus === 'SENT' && batch.manifestSealStatus === 'SENT'
+    && !['CANCELLING', 'CANCELLED'].includes(batch.status) && batch.manifestCancelStatus === 'NOT_REQUESTED')
+  .flatMap((batch) => batch.bagNos || [batch.bagNo])));
 const routeTargets = computed(() => routes.value.filter((item) => item.originFacilityCode === currentFacilityCode.value
   && item.status === 1
-  && (!selectedBag.value?.destinationFacilityCode
-    || item.destinationFacilityCode === selectedBag.value.destinationFacilityCode)));
+  && (!(selectedBag.value?.currentDestinationOrgCode || selectedBag.value?.destinationFacilityCode)
+    || item.destinationFacilityCode === (selectedBag.value.currentDestinationOrgCode || selectedBag.value.destinationFacilityCode))));
 const canSubmit = computed(() => Boolean(form.bagNo && form.toFacilityCode) && !submitting.value);
 
 watch(routeTargets, (targets) => {
@@ -98,7 +106,8 @@ async function loadHandoffs() {
 }
 
 async function refreshBags() {
-  await loadHandoffs();
+  const [, batchRows] = await Promise.all([loadHandoffs(), dispatchApi.listBatches(session.token)]);
+  batches.value = batchRows;
   await loadBags();
 }
 

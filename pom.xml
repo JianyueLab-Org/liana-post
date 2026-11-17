@@ -106,6 +106,15 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>database</id>
+            <modules>
+                <module>database</module>
+            </modules>
+        </profile>
+    </profiles>
+
     <dependencyManagement>
         <dependencies>
             <dependency>

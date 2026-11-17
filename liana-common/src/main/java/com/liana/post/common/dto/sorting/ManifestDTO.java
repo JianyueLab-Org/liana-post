@@ -5,10 +5,17 @@ import java.util.List;
 
 public class ManifestDTO {
     private String manifestCode;
+    private String batchNo;
+    private Integer versionNo;
     private String originNode;
     private String targetNode;
     private BigDecimal totalWeight;
     private List<TotalPackageDTO> totalPackages;
+
+    public String getBatchNo() { return batchNo; }
+    public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
+    public Integer getVersionNo() { return versionNo; }
+    public void setVersionNo(Integer versionNo) { this.versionNo = versionNo; }
 
     public String getManifestCode() {
         return manifestCode;

@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="card-title">运输计划</h3>
-          <p class="mt-1 text-sm text-gray-500">为运输资产和线路编排计划。</p>
+          <p class="mt-1 text-sm text-gray-500">为运输资产和线路编排计划。时刻与星期均使用海岛时间 UTC+12。</p>
         </div>
         <div class="flex gap-2">
           <button class="btn btn-secondary" @click="load">刷新</button>
@@ -56,7 +56,9 @@
           </select>
         </div>
 
+        <label class="text-xs text-gray-500">出发时间（UTC+12）</label>
         <input v-model="form.departureTime" class="input" type="datetime-local" />
+        <label class="text-xs text-gray-500">到达时间（UTC+12）</label>
         <input v-model="form.arrivalTime" class="input" type="datetime-local" />
         <input v-model="form.weekday" class="input" placeholder="星期代码，例如 MON" />
         <select v-model="form.status" class="select">
@@ -87,8 +89,8 @@ const columns = [
   { key: 'scheduleCode', label: '计划编码' },
   { key: 'assetId', label: '资产ID' },
   { key: 'routeId', label: '线路ID' },
-  { key: 'departureTime', label: '出发时间' },
-  { key: 'arrivalTime', label: '到达时间' },
+  { key: 'departureBusinessTime', label: '出发时间（UTC+12）' },
+  { key: 'arrivalBusinessTime', label: '到达时间（UTC+12）' },
   { key: 'weekday', label: '星期' },
   { key: 'status', label: '状态' },
 ];
@@ -113,7 +115,11 @@ async function loadRoutes() {
 async function load() {
   query.page = page.value;
   const result = await transportApi.listSchedules(query, session.token);
-  rows.value = result.list || [];
+  rows.value = (result.list || []).map((item) => ({
+    ...item,
+    departureBusinessTime: businessTime(item.departureTime),
+    arrivalBusinessTime: businessTime(item.arrivalTime),
+  }));
   total.value = result.total || 0;
   page.value = result.page || 1;
 }
@@ -124,13 +130,25 @@ function openCreate() {
   drawerOpen.value = true;
 }
 
+function businessTime(value) {
+  if (!value) return '-';
+  const utc = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Etc/GMT-12', dateStyle: 'short', timeStyle: 'short',
+  }).format(new Date(utc));
+}
+
+function utcTime(value) {
+  return value ? new Date(`${value}+12:00`).toISOString().slice(0, 19) : null;
+}
+
 async function save() {
   const payload = {
     scheduleCode: form.scheduleCode,
     assetId: Number(form.assetId),
     routeId: Number(form.routeId),
-    departureTime: form.departureTime ? `${form.departureTime}:00` : null,
-    arrivalTime: form.arrivalTime ? `${form.arrivalTime}:00` : null,
+    departureTime: utcTime(form.departureTime),
+    arrivalTime: utcTime(form.arrivalTime),
     weekday: form.weekday,
     status: form.status,
   };

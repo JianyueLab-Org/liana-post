@@ -21,6 +21,10 @@ public class TransportTaskEntity {
     private LocalDateTime createdAt;
     @TableField(exist = false)
     private List<String> bagNos;
+    @TableField(exist = false)
+    private List<java.util.Map<String, Object>> manifestAssignments;
+    public List<java.util.Map<String, Object>> getManifestAssignments() { return manifestAssignments; }
+    public void setManifestAssignments(List<java.util.Map<String, Object>> value) { manifestAssignments = value; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

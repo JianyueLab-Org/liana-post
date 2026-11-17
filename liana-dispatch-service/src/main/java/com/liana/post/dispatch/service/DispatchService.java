@@ -24,6 +24,8 @@ public interface DispatchService {
     DispatchBagResponse createDispatchBag(DispatchBagCreateRequest request);
     DispatchBatchResponse createDispatchBatch(DispatchBatchCreateRequest request);
     DispatchBatchResponse approveDispatchBatch(String batchNo, DispatchBatchApproveRequest request);
+    DispatchBatchResponse sealDispatchBatch(String batchNo);
+    DispatchBatchResponse cancelDispatchBatch(String batchNo, com.liana.post.dispatch.model.dto.DispatchBatchCancelRequest request);
     HandoffRecordResponse createHandoffRecord(HandoffCreateRequest request);
     Boolean markManifestArrived(ManifestArrivedRequest request);
     DispatchBagResponse syncMailBag(DispatchMailSyncRequest request);
@@ -33,5 +35,4 @@ public interface DispatchService {
     List<DispatchBatchResponse> listDispatchBatches();
     List<HandoffRecordResponse> listHandoffRecords();
     DashboardSummaryResponse dashboardSummary(String facilityCode);
-    void initDefaults();
 }

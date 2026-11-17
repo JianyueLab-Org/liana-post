@@ -39,3 +39,17 @@ feign:
 sorting:
   xray:
     root: ${SORTING_XRAY_ROOT:x-ray}
+manifest:
+  internal-token: ${MANIFEST_INTERNAL_TOKEN:}
+packing:
+  internal-token: ${PACKING_INTERNAL_TOKEN:}
+spring.cloud.openfeign.client.config:
+  sortingUnpackingClient:
+    connectTimeout: 4000
+    readTimeout: 10000
+  sortingTransportReceiptClient:
+    connectTimeout: 4000
+    readTimeout: 10000
+  sortingDispatchLifecycleClient:
+    connectTimeout: 4000
+    readTimeout: 10000

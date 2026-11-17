@@ -12,9 +12,12 @@ public class DispatchBatchBagEntity {
     private Long id;
     private String batchNo;
     private String bagNo;
+    private Integer activeFlag;
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }
+    public Integer getActiveFlag() { return activeFlag; }
+    public void setActiveFlag(Integer value) { activeFlag = value; }
     public void setId(Long id) { this.id = id; }
     public String getBatchNo() { return batchNo; }
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }

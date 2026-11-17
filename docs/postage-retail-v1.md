@@ -51,7 +51,7 @@
 
 ## 部署与验证
 
-`liana-postage-service/src/main/resources/retail-schema.sql` 为可重复执行的增量建表脚本，保留全部已有资费、报价及零售数据。对已有 MySQL 在 postage_db 中执行该文件，再部署服务；Spring 初始化同时加载 schema.sql 与 retail-schema.sql，Docker 的 postage-db-init 同时导入两者。不要重置 MySQL 数据卷，也不要对已有系统运行包含 DROP TABLE 的历史全量脚本。
+`liana-postage-service/src/test/resources/retail-schema.sql` 为可重复执行的增量建表脚本，保留全部已有资费、报价及零售数据。对已有 MySQL 在 postage_db 中执行该文件，再部署服务；Spring 初始化同时加载 schema.sql 与 retail-schema.sql，统一 database-init 同时导入两者。不要重置 MySQL 数据卷，也不要对已有系统运行包含 DROP TABLE 的历史全量脚本。
 
 前端新增 `/postage/retail` 和管理员 `/postage/stamp-policy`。后端测试使用隔离 H2 MySQL 模式，覆盖金额张数校验、同请求重试、并发创建/收款、代码碰撞、审计失败回滚、过期边界、作废、规则快照、取消和权限。前端测试覆盖请求编号恢复、金额张数、角色菜单和接口。
 

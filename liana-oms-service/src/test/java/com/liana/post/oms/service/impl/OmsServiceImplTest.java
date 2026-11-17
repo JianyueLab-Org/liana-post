@@ -82,6 +82,10 @@ class OmsServiceImplTest {
         }
         var captured = org.mockito.ArgumentCaptor.forClass(com.liana.post.oms.model.entity.MailEntity.class);
         org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(4)).saveMail(captured.capture());
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(4))
+                .saveSender(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(4))
+                .saveRecipient(org.mockito.ArgumentMatchers.any());
         assertEquals("", captured.getAllValues().get(0).getAdditionalServices());
         assertEquals("REGISTRATION", captured.getAllValues().get(1).getAdditionalServices());
         assertEquals("U", captured.getAllValues().get(1).getMailTypeCode());

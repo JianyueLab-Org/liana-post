@@ -11,6 +11,13 @@ public class DispatchBagBriefResponse {
     private String facilityRouteCode;
     private String transportTaskCode;
     private String status;
+    private String manifestNo;
+    private String manifestBatchStatus;
+
+    public String getManifestNo() { return manifestNo; }
+    public void setManifestNo(String value) { manifestNo = value; }
+    public String getManifestBatchStatus() { return manifestBatchStatus; }
+    public void setManifestBatchStatus(String value) { manifestBatchStatus = value; }
     private String mailTypeCode;
     private Integer mailCount;
     private Integer totalWeightGrams;

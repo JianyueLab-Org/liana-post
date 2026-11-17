@@ -18,9 +18,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: ${FACILITY_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
-      schema-locations: classpath:schema.sql
-      data-locations: classpath:data.sql
+      mode: never
       continue-on-error: true
 mybatis-plus:
   configuration:

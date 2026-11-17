@@ -16,9 +16,7 @@ spring:
       database: ${REDIS_DB:0}
   sql:
     init:
-      mode: ${DISPATCH_SQL_INIT_MODE:${SQL_INIT_MODE:never}}
-      schema-locations: classpath:schema.sql
-      data-locations: classpath:data.sql
+      mode: never
   cloud:
     nacos:
       discovery:

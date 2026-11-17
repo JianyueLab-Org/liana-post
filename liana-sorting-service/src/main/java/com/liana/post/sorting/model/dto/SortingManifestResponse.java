@@ -10,6 +10,7 @@ public class SortingManifestResponse {
     private String destinationOrgCode;
     private String batchNo;
     private String manifestStatus;
+    private Integer versionNo;
     private Integer prealertFlag;
     private Integer expectedPackageQty;
     private Integer expectedItemQty;
@@ -29,6 +30,8 @@ public class SortingManifestResponse {
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public String getManifestStatus() { return manifestStatus; }
     public void setManifestStatus(String manifestStatus) { this.manifestStatus = manifestStatus; }
+    public Integer getVersionNo() { return versionNo; }
+    public void setVersionNo(Integer versionNo) { this.versionNo = versionNo; }
     public Integer getPrealertFlag() { return prealertFlag; }
     public void setPrealertFlag(Integer prealertFlag) { this.prealertFlag = prealertFlag; }
     public Integer getExpectedPackageQty() { return expectedPackageQty; }

@@ -77,7 +77,7 @@ public class AuthController {
 
     @PostMapping({"/project/init", "/system/project/init"})
     public Result<ProjectInitResponse> initProject() {
-        return Result.ok(authService.initProject());
+        throw new com.liana.post.common.exception.BusinessException(409, "基础数据由部署初始化任务维护，请联系系统管理员");
     }
 
     @GetMapping({"/dashboard/summary", "/system/dashboard/summary"})

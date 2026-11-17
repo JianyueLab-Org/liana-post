@@ -60,8 +60,6 @@ public class OmsServiceImpl implements OmsService {
     @Override
     @Transactional
     public MailResponse createMail(MailCreateRequest request) {
-        omsRepository.seedDefaults();
-
         String facilityCode = resolveFacilityCode(request);
         String mailScope = normalizeMailScope(request.getMailScope());
 
@@ -316,11 +314,6 @@ public class OmsServiceImpl implements OmsService {
         evictMailCache(waybillNo);
         evictCandidateCache();
         return toResponse(mail);
-    }
-
-    @Override
-    public void initDefaults() {
-        omsRepository.seedDefaults();
     }
 
     @Override

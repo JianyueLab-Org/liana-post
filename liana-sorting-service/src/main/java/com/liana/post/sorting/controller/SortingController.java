@@ -7,6 +7,9 @@ import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.sorting.model.dto.*;
 import com.liana.post.sorting.service.SortingService;
+import com.liana.post.sorting.service.ManifestPrealertService;
+import com.liana.post.sorting.service.ManifestSealService;
+import com.liana.post.sorting.service.ManifestCancelService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,9 +25,69 @@ import java.util.List;
 @RequestMapping("/api/v1/sorting")
 public class SortingController {
     private final SortingService sortingService;
+    private final ManifestPrealertService manifestPrealertService;
+    private final ManifestSealService manifestSealService;
+    private final ManifestCancelService manifestCancelService;
+    private final com.liana.post.sorting.service.ManifestReceivingService receiving;
+    private final com.liana.post.sorting.service.UnpackingService unpacking;
+    private final com.liana.post.sorting.service.DiscrepancyDispositionService discrepancyDisposition;
 
-    public SortingController(SortingService sortingService) {
+    public SortingController(SortingService sortingService, ManifestPrealertService manifestPrealertService, ManifestSealService manifestSealService,
+                             ManifestCancelService manifestCancelService, com.liana.post.sorting.service.ManifestReceivingService receiving,
+                             com.liana.post.sorting.service.UnpackingService unpacking,
+                             com.liana.post.sorting.service.DiscrepancyDispositionService discrepancyDisposition) {
         this.sortingService = sortingService;
+        this.manifestPrealertService = manifestPrealertService;
+        this.manifestSealService = manifestSealService;
+        this.manifestCancelService = manifestCancelService;
+        this.receiving = receiving;
+        this.unpacking = unpacking;
+        this.discrepancyDisposition = discrepancyDisposition;
+    }
+
+    @GetMapping("/manifests/{manifestNo}/versions")
+    public Result<List<ManifestPrealertService.Version>> manifestVersions(
+            @org.springframework.web.bind.annotation.PathVariable("manifestNo") String manifestNo,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        authorizeManifestHistory(manifestNo, authorization);
+        return Result.ok(manifestPrealertService.versions(manifestNo));
+    }
+
+    @GetMapping("/manifests/{manifestNo}/seal-receipt")
+    public Result<ManifestSealService.Receipt> manifestSealReceipt(
+            @org.springframework.web.bind.annotation.PathVariable("manifestNo") String manifestNo,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        authorizeManifestHistory(manifestNo, authorization);
+        return Result.ok(manifestSealService.receipt(manifestNo));
+    }
+
+    @GetMapping("/manifests/{manifestNo}/bag-receipts")
+    public Result<List<java.util.Map<String, Object>>> bagReceipts(
+            @org.springframework.web.bind.annotation.PathVariable("manifestNo") String manifestNo,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        authorizeManifestHistory(manifestNo, authorization);
+        return Result.ok(receiving.history(manifestNo));
+    }
+
+    private void authorizeManifestHistory(String manifestNo, String authorization) {
+        String token = authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)
+                ? authorization.substring(7).trim() : null;
+        if (!JwtTokenUtil.validateToken(token)) throw new BusinessException(401, "valid login required");
+        var actor = JwtTokenUtil.getUserContextFromToken(token);
+        var manifest = sortingService.getManifestDetail(manifestNo);
+        if (!"ADMIN".equals(actor.getRole()) && (actor.getFacilityCode() == null
+                || (!actor.getFacilityCode().equalsIgnoreCase(manifest.getSourceOrgCode())
+                && !actor.getFacilityCode().equalsIgnoreCase(manifest.getDestinationOrgCode())))) {
+            throw new BusinessException(403, "manifest history belongs to its handoff facilities");
+        }
+    }
+
+    @GetMapping("/manifests/{manifestNo}/cancel-receipt")
+    public Result<ManifestCancelService.Receipt> manifestCancelReceipt(
+            @org.springframework.web.bind.annotation.PathVariable("manifestNo") String manifestNo,
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        authorizeManifestHistory(manifestNo, authorization);
+        return Result.ok(manifestCancelService.receipt(manifestNo));
     }
 
     @PostMapping("/manifest/sync")
@@ -41,6 +104,12 @@ public class SortingController {
     @PostMapping("/unpack-item")
     public Result<List<SortingLineResponse>> unpackItem(@Valid @RequestBody SortingUnpackItemRequest request) {
         return Result.ok(sortingService.unpackItem(request));
+    }
+
+    @GetMapping("/unpack-requests/{requestNo}")
+    public Result<com.liana.post.sorting.service.UnpackingService.Receipt> unpackReceipt(
+            @org.springframework.web.bind.annotation.PathVariable("requestNo") String requestNo) {
+        return Result.ok(unpacking.receipt(requestNo));
     }
 
     @PostMapping("/route-calculate")
@@ -84,7 +153,7 @@ public class SortingController {
 
     @PostMapping("/slots/seal")
     public Result<SortingPackageResponse> sealBagBySlot(@RequestBody java.util.Map<String, String> payload) {
-        return Result.ok(sortingService.sealBagBySlot(payload.get("slotCode"), payload.get("stationCode"), payload.get("operatorId")));
+        return Result.ok(sortingService.sealBagBySlot(payload.get("slotCode"), payload.get("stationCode"), payload.get("operatorId"), payload.get("idempotencyKey")));
     }
 
     @GetMapping("/country-slots")
@@ -122,6 +191,13 @@ public class SortingController {
     @GetMapping("/discrepancies")
     public Result<List<SortingDiscrepancyResponse>> listDiscrepancies(@RequestParam(name = "packageNo", required = false) String packageNo) {
         return Result.ok(sortingService.listDiscrepancies(packageNo));
+    }
+
+    @PostMapping("/discrepancies/{verificationNo}/disposition")
+    public Result<com.liana.post.sorting.service.DiscrepancyDispositionService.Receipt> disposeDiscrepancy(
+            @org.springframework.web.bind.annotation.PathVariable("verificationNo") String verificationNo,
+            @RequestBody com.liana.post.sorting.service.DiscrepancyDispositionService.Request request) {
+        return Result.ok(discrepancyDisposition.apply(verificationNo, request));
     }
 
     @GetMapping("/dashboard/summary")

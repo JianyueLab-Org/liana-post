@@ -3,7 +3,6 @@ package com.liana.post.auth.service;
 import com.liana.post.auth.model.dto.LoginRequest;
 import com.liana.post.auth.model.dto.LoginResponse;
 import com.liana.post.auth.model.dto.PermissionResponse;
-import com.liana.post.auth.model.dto.ProjectInitResponse;
 import com.liana.post.auth.model.dto.RoleResponse;
 import com.liana.post.auth.model.dto.UserCreateRequest;
 import com.liana.post.auth.model.dto.UserProfileResponse;
@@ -21,6 +20,5 @@ public interface AuthService {
     void resetPassword(String username, String newPassword);
     List<RoleResponse> listRoles();
     List<PermissionResponse> listPermissions();
-    ProjectInitResponse initProject();
     DashboardSummaryResponse dashboardSummary();
 }

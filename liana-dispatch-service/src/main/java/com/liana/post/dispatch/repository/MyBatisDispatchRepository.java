@@ -32,6 +32,7 @@ public class MyBatisDispatchRepository implements DispatchRepository {
             DispatchConstants.BATCH_STATUS_PENDING,
             DispatchConstants.BATCH_STATUS_APPROVED,
             DispatchConstants.BATCH_STATUS_HANDED_OFF,
+            DispatchConstants.BATCH_STATUS_CANCELLING,
             DispatchConstants.BATCH_STATUS_CANCELLED
     );
 
@@ -122,6 +123,9 @@ public class MyBatisDispatchRepository implements DispatchRepository {
         if (entity.getBatchNo() == null || entity.getBatchNo().isBlank()) {
             entity.setBatchNo(IdGeneratorUtil.generateDispatchNo());
         }
+        if (entity.getManifestNo() == null || entity.getManifestNo().isBlank()) {
+            entity.setManifestNo("M" + java.util.UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT));
+        }
         if (entity.getStatus() == null || entity.getStatus().isBlank()) {
             entity.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
         }
@@ -149,28 +153,24 @@ public class MyBatisDispatchRepository implements DispatchRepository {
             throw new BusinessException(400, "batch must contain at least one bag");
         }
         List<String> previousBatchNos = dispatchBatchBagMapper.selectList(new LambdaQueryWrapper<DispatchBatchBagEntity>()
-                        .in(DispatchBatchBagEntity::getBagNo, normalizedBagNos))
+                        .in(DispatchBatchBagEntity::getBagNo, normalizedBagNos).eq(DispatchBatchBagEntity::getActiveFlag, 1))
                 .stream().map(DispatchBatchBagEntity::getBatchNo).distinct().toList();
-        dispatchBatchBagMapper.delete(new LambdaQueryWrapper<DispatchBatchBagEntity>()
-                .in(DispatchBatchBagEntity::getBagNo, normalizedBagNos));
+        if (previousBatchNos.stream().anyMatch(previous -> !normalizedBatchNo.equalsIgnoreCase(previous))) {
+            throw new BusinessException(409, "bag already belongs to another batch; implicit reassignment is not allowed");
+        }
+        List<String> existingBagNos = findBatchBagNos(normalizedBatchNo);
+        if (!normalizedBagNos.containsAll(existingBagNos)) {
+            throw new BusinessException(409, "batch contents cannot be silently removed; cancel and recreate explicitly");
+        }
         for (String bagNo : normalizedBagNos) {
+            if (existingBagNos.contains(bagNo)) continue;
             DispatchBatchBagEntity link = new DispatchBatchBagEntity();
             link.setBatchNo(normalizedBatchNo);
             link.setBagNo(bagNo);
+            link.setActiveFlag(1);
             link.setCreatedAt(LocalDateTime.now());
             if (dispatchBatchBagMapper.insert(link) <= 0) {
                 throw new BusinessException(500, "failed to link bag to dispatch batch");
-            }
-        }
-        for (String previousBatchNo : previousBatchNos) {
-            if (!normalizedBatchNo.equalsIgnoreCase(previousBatchNo) && findBatchBagNos(previousBatchNo).isEmpty()) {
-                DispatchBatchEntity previous = dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>()
-                        .eq(DispatchBatchEntity::getBatchNo, previousBatchNo));
-                if (previous != null) {
-                    previous.setStatus(DispatchConstants.BATCH_STATUS_CANCELLED);
-                    stamp(previous);
-                    dispatchBatchMapper.updateById(previous);
-                }
             }
         }
     }
@@ -279,9 +279,14 @@ public class MyBatisDispatchRepository implements DispatchRepository {
 
     @Override
     public Optional<DispatchBagEntity> findDispatchBagByBagNo(String bagNo) {
-        String cacheKey = RedisKeyConstants.DISPATCH_BAG_PREFIX + normalize(bagNo);
-        DispatchBagEntity cached = RedisCacheSupport.getOrLoad(redisTemplate, cacheKey, DispatchBagEntity.class, java.time.Duration.ofMinutes(5), () -> dispatchBagMapper.selectOne(new LambdaQueryWrapper<DispatchBagEntity>().eq(DispatchBagEntity::getBagNo, normalize(bagNo))));
-        return Optional.ofNullable(cached);
+        return Optional.ofNullable(dispatchBagMapper.selectOne(new LambdaQueryWrapper<DispatchBagEntity>()
+                .eq(DispatchBagEntity::getBagNo, normalize(bagNo))));
+    }
+
+    @Override
+    public Optional<DispatchBagEntity> lockDispatchBagByBagNo(String bagNo) {
+        return Optional.ofNullable(dispatchBagMapper.selectOne(new LambdaQueryWrapper<DispatchBagEntity>()
+                .eq(DispatchBagEntity::getBagNo, normalize(bagNo)).last("FOR UPDATE")));
     }
 
     @Override
@@ -292,12 +297,29 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     }
 
     @Override
+    public Optional<DispatchBatchEntity> lockDispatchBatchByBatchNo(String batchNo) {
+        DispatchBatchEntity batch = dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>()
+                .eq(DispatchBatchEntity::getBatchNo, normalize(batchNo)).last("FOR UPDATE"));
+        if (batch != null) batch.setBagNos(findBatchBagNos(batch.getBatchNo()));
+        return Optional.ofNullable(batch);
+    }
+
+    @Override
+    public Optional<DispatchBatchEntity> lockDispatchBatchByBagNo(String bagNo) {
+        // Resolve only current custody; historical batch memberships remain queryable by batch.
+        var batch = findDispatchBatchByBagNo(bagNo).flatMap(found -> lockDispatchBatchByBatchNo(found.getBatchNo()));
+        if (batch.isPresent() && !findDispatchBatchByBagNo(bagNo).map(current -> current.getBatchNo().equals(batch.get().getBatchNo())).orElse(false)) {
+            throw new BusinessException(409, "bag batch changed while acquiring custody; retry");
+        }
+        return batch;
+    }
+
+    @Override
     public Optional<DispatchBatchEntity> findDispatchBatchByBagNo(String bagNo) {
         String normalizedBagNo = normalize(bagNo);
         DispatchBatchBagEntity link = dispatchBatchBagMapper.selectOne(new LambdaQueryWrapper<DispatchBatchBagEntity>()
-                .eq(DispatchBatchBagEntity::getBagNo, normalizedBagNo).last("LIMIT 1"));
-        DispatchBatchEntity batch = link == null
-                ? dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBagNo, normalizedBagNo))
+                .eq(DispatchBatchBagEntity::getBagNo, normalizedBagNo).eq(DispatchBatchBagEntity::getActiveFlag, 1));
+        DispatchBatchEntity batch = link == null ? null
                 : dispatchBatchMapper.selectOne(new LambdaQueryWrapper<DispatchBatchEntity>().eq(DispatchBatchEntity::getBatchNo, link.getBatchNo()));
         if (batch != null) batch.setBagNos(findBatchBagNos(batch.getBatchNo()));
         return Optional.ofNullable(batch);
@@ -310,8 +332,11 @@ public class MyBatisDispatchRepository implements DispatchRepository {
 
     @Override
     public Optional<HandoffRecordEntity> findHandoffRecordByBagNo(String bagNo) {
+        var batch = findDispatchBatchByBagNo(bagNo);
+        if (batch.isEmpty()) return Optional.empty();
         return Optional.ofNullable(handoffRecordMapper.selectOne(new LambdaQueryWrapper<HandoffRecordEntity>()
                 .eq(HandoffRecordEntity::getBagNo, normalize(bagNo))
+                .eq(HandoffRecordEntity::getBatchNo, batch.get().getBatchNo())
                 .eq(HandoffRecordEntity::getStatus, DispatchConstants.HANDAOFF_STATUS_COMPLETED)
                 .last("LIMIT 1")));
     }
@@ -331,38 +356,6 @@ public class MyBatisDispatchRepository implements DispatchRepository {
     @Override
     public List<HandoffRecordEntity> findAllHandoffRecords() {
         return handoffRecordMapper.selectList(null);
-    }
-
-    @Override
-    @Transactional
-    public int assignMailBagToWaybillNos(List<String> waybillNos, String bagNo, String currentFacilityCode) {
-        RedisCacheSupport.evictLike(redisTemplate, RedisKeyConstants.DISPATCH_BAG_PREFIX);
-        return waybillNos.size();
-    }
-
-    @Override
-    public boolean hasAnyData() {
-        return routeRuleMapper.selectCount(null) > 0
-                || dispatchBagMapper.selectCount(null) > 0
-                || dispatchBatchMapper.selectCount(null) > 0
-                || handoffRecordMapper.selectCount(null) > 0;
-    }
-
-    @Override
-    @Transactional
-    public void seedDefaults() {
-        if (hasAnyData()) {
-            return;
-        }
-        RouteRuleEntity rule = new RouteRuleEntity();
-        rule.setRuleCode("B1-C1-TRUCK");
-        rule.setSourceFacilityCode("B1");
-        rule.setTargetFacilityCode("C1");
-        rule.setRouteScope("DOMESTIC");
-        rule.setTransportMode("TRUCK");
-        rule.setPriorityLevel(1);
-        rule.setEnabled(1);
-        saveRouteRule(rule);
     }
 
     private void stamp(RouteRuleEntity entity) {

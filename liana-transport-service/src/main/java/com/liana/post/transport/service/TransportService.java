@@ -37,5 +37,4 @@ public interface TransportService {
     PageResult<TransportTaskEntity> pageTasks(long page, long pageSize, String keyword, String status);
 
     DashboardSummaryResponse dashboardSummary();
-    void initDefaults();
 }

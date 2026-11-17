@@ -25,6 +25,4 @@ public interface AuthRepository {
     boolean saveUserRole(Long userId, Long roleId);
     boolean saveRolePermission(Long roleId, Long permissionId);
     void updatePassword(String username, String passwordHash);
-    boolean hasAnyData();
-    void seedDefaults();
 }

@@ -39,5 +39,4 @@ public interface OmsService {
     MailResponse deliverMail(String waybillNo, String facilityCode);
     MailResponse departExchangeMail(String waybillNo, String facilityCode);
     DashboardSummaryResponse dashboardSummary(String facilityCode);
-    void initDefaults();
 }

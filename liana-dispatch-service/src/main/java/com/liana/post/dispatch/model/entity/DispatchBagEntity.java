@@ -11,6 +11,9 @@ import java.util.List;
 
 @TableName("dispatch_bag")
 public class DispatchBagEntity {
+    private String lastReceiptEventNo;
+    public String getLastReceiptEventNo() { return lastReceiptEventNo; }
+    public void setLastReceiptEventNo(String value) { lastReceiptEventNo = value; }
     @TableId(type = IdType.AUTO)
     private Long id;
     private String bagNo;

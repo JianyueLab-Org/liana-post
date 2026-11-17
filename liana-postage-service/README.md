@@ -40,15 +40,7 @@
 CREATE DATABASE postage_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-配置 `POSTAGE_DB_URL`（默认指向本机 postage_db）、`POSTAGE_DB_USERNAME` 和 `POSTAGE_DB_PASSWORD`；不要把密码写入源码。首次启动设置：
-
-```powershell
-$env:POSTAGE_SQL_INIT_MODE = 'always'
-$env:POSTAGE_SEED_INITIAL_TARIFF = 'true'
-java -jar liana-postage-service/target/liana-postage-service-1.0.0-exec.jar --spring.profiles.active=standalone
-```
-
-`schema.sql` 创建版本表、报价表与锁表；`retail-schema.sql` 创建零售、发行规则、收款、凭证与审计表；`acceptance-schema.sql` 创建结算、邮票关系及预占锁表。初始导入仅在版本表为空时执行，不覆盖管理员配置。初始化后将 SQL_INIT_MODE 设为 never、SEED_INITIAL_TARIFF 设为 false（均使用 POSTAGE_ 前缀）。已有数据库升级请按顺序执行可重复的 `retail-schema.sql`、`acceptance-schema.sql`，同时升级 OMS 台账，保留原资费与报价。
+配置 `POSTAGE_DB_URL`（默认指向本机 postage_db）、`POSTAGE_DB_USERNAME` 和 `POSTAGE_DB_PASSWORD`；不要把密码写入源码。首次初始化由根目录 `script/demo.ps1` 调用 `database` 模块的 Flyway 迁移完成，服务运行时固定 `POSTAGE_SQL_INIT_MODE=never`。H2 standalone 测试使用 `src/test/resources/` 下的独立 SQL，不是生产结构来源。已有 MySQL 数据库请通过追加 Flyway 迁移升级。
 
 standalone 关闭 Nacos，但仍需数据库；默认端口 8090，可用 POSTAGE_SERVER_PORT 覆盖。健康及就绪路径为 `/actuator/health`、`/actuator/health/readiness`。资费生效前应用仍可健康运行，但报价返回 409。
 
@@ -56,15 +48,7 @@ standalone 关闭 Nacos，但仍需数据库；默认端口 8090，可用 POSTAG
 
 ### Docker 演示部署
 
-项目根目录的 `docker-compose.demo.yml` 已包含邮资服务及 `postage-db-init` 初始化容器：
-
-```powershell
-docker compose -f docker-compose.demo.yml up -d --build liana-postage-service
-```
-
-初始化容器自动创建 `postage_db` 并执行本服务 `schema.sql`、`retail-schema.sql` 和 `acceptance-schema.sql`，也适用于已有 MySQL 数据卷。OMS 台账升级见收寄文档。应用等待初始化成功后启动，连接容器内 `mysql:3306`，沿用演示环境的数据库账号；无需启用 standalone。表结构由初始化容器管理，`POSTAGE_SQL_INIT_MODE=never`。
-
-首次部署默认启用 `POSTAGE_SEED_INITIAL_TARIFF=true`，仅在版本表为空时导入初始资费。导入成功后可在本地 `.env` 设置 `POSTAGE_SEED_INITIAL_TARIFF=false` 并重建容器。初始资费生效时间仍为 2026-10-15 00:00:00 UTC+08:00。完整部署与维护说明见项目根目录 `CONTAINER_DEPLOYMENT.md`。
+正式演示 Compose 已包含邮资服务，并依赖统一 `database-init` 完成九库迁移、种子和核查；不会再创建独立的 `postage-db-init`。使用 `./script/demo.ps1 -Action Up`，完整说明见根目录 `CONTAINER_DEPLOYMENT.md`。
 
 ## 接口及权限
 

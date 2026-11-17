@@ -22,7 +22,7 @@ MySQL 持久卷初始化过的环境不会自动重新执行初始化 SQL。要�
 docker exec -e MYSQL_PWD=liana_demo liana-demo-mysql sh -c "mysql --user=root --default-character-set=utf8mb4 < /demo-db-revise/017_liana_pacific_demo_network.sql"
 ```
 
-该 SQL 可重复运行：按设施、路线、运输资源及班次编码插入或更新；不删除旧行、不重建表。新建空 MySQL 卷时，`script/demo-mysql-init.sh` 会按 `db_revise` 文件顺序自动执行该脚本。不要为了导入它而删除或重置 `mysql_data`。
+该 SQL 可重复运行：按设施、路线、运输资源及班次编码插入或更新；不删除旧行、不重建表。新建空 MySQL 卷时，正式演示使用 `script/demo.ps1` 和统一 `database-init`；旧脚本已删除。不要为了导入它而删除或重置 `mysql_data`。
 
 脚本还会创建 `facility_db.demo_postal_region`、`demo_postal_island`、`demo_facility_profile`、`demo_route_profile` 四张 `demo_` 场景扩展表，分别保存岛群/邮编前缀、12 座岛屿及地图标注位置、设施邮编覆盖与服务信息/点位、邮路频次与运营说明。`facility` 和 `transport` 的现有业务表仍存放正式设施、路线、资源与班次记录。
 

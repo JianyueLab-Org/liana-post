@@ -3,6 +3,12 @@ package com.liana.post.sorting.model.dto;
 import java.time.LocalDateTime;
 
 public class SortingPackageResponse {
+    private String receiveRequestNo;
+    private java.util.List<com.liana.post.common.dto.sorting.ManifestReceipt.Event> receiptEvents;
+    public String getReceiveRequestNo() { return receiveRequestNo; }
+    public void setReceiveRequestNo(String value) { receiveRequestNo = value; }
+    public java.util.List<com.liana.post.common.dto.sorting.ManifestReceipt.Event> getReceiptEvents() { return receiptEvents; }
+    public void setReceiptEvents(java.util.List<com.liana.post.common.dto.sorting.ManifestReceipt.Event> value) { receiptEvents = value; }
     private Long id;
     private String packageNo;
     private String packageLevel;

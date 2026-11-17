@@ -16,6 +16,8 @@ public class SortingManifestEntity {
     private String destinationOrgCode;
     private String batchNo;
     private String manifestStatus;
+    private Integer versionNo;
+    private String contentHash;
     private Integer prealertFlag;
     private Integer expectedPackageQty;
     private Integer expectedItemQty;
@@ -37,6 +39,10 @@ public class SortingManifestEntity {
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public String getManifestStatus() { return manifestStatus; }
     public void setManifestStatus(String manifestStatus) { this.manifestStatus = manifestStatus; }
+    public Integer getVersionNo() { return versionNo; }
+    public void setVersionNo(Integer versionNo) { this.versionNo = versionNo; }
+    public String getContentHash() { return contentHash; }
+    public void setContentHash(String contentHash) { this.contentHash = contentHash; }
     public Integer getPrealertFlag() { return prealertFlag; }
     public void setPrealertFlag(Integer prealertFlag) { this.prealertFlag = prealertFlag; }
     public Integer getExpectedPackageQty() { return expectedPackageQty; }

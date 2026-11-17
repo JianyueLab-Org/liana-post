@@ -19,7 +19,6 @@ import com.liana.post.dispatch.model.dto.RouteDecisionResponse;
 import com.liana.post.dispatch.model.dto.RouteRuleCreateRequest;
 import com.liana.post.dispatch.model.entity.RouteRuleEntity;
 import com.liana.post.dispatch.service.DispatchService;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,11 +38,6 @@ public class DispatchController {
 
     public DispatchController(DispatchService dispatchService) {
         this.dispatchService = dispatchService;
-    }
-
-    @PostConstruct
-    public void init() {
-        dispatchService.initDefaults();
     }
 
     @PostMapping("/route-rules")
@@ -92,6 +86,17 @@ public class DispatchController {
         return Result.ok(dispatchService.createHandoffRecord(request));
     }
 
+    @PostMapping("/batches/{batchNo}/seal")
+    public Result<DispatchBatchResponse> sealBatch(@PathVariable("batchNo") String batchNo) {
+        return Result.ok(dispatchService.sealDispatchBatch(batchNo));
+    }
+
+    @PostMapping("/batches/{batchNo}/cancel")
+    public Result<DispatchBatchResponse> cancelBatch(@PathVariable("batchNo") String batchNo,
+            @Valid @RequestBody com.liana.post.dispatch.model.dto.DispatchBatchCancelRequest request) {
+        return Result.ok(dispatchService.cancelDispatchBatch(batchNo, request));
+    }
+
     @PostMapping("/manifests/arrived")
     public Result<Boolean> arrived(@Valid @RequestBody ManifestArrivedRequest request) {
         return Result.ok(dispatchService.markManifestArrived(request));
@@ -124,6 +129,11 @@ public class DispatchController {
         brief.setOriginFacilityCode(bag.getOriginFacilityCode());
         brief.setDestinationFacilityCode(bag.getDestinationFacilityCode());
         brief.setRouteCode(bag.getRouteCode());
+        brief.setFacilityRouteCode(bag.getFacilityRouteCode());
+        brief.setTransportTaskCode(bag.getTransportTaskCode());
+        brief.setManifestNo(bag.getManifestNo());
+        brief.setManifestBatchStatus(bag.getManifestBatchStatus());
+        brief.setMailNoList(bag.getMailNoList());
         brief.setStatus(bag.getStatus());
         brief.setMailTypeCode(bag.getMailTypeCode());
         brief.setMailCount(bag.getMailCount());

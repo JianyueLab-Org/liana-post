@@ -2,11 +2,9 @@ package com.liana.post.transport.service.impl;
 
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.DispatchBagBriefResponse;
-import com.liana.post.common.dto.dispatch.DispatchTransportTaskLinkRequest;
 import com.liana.post.common.dto.tracking.TrackingEventCreateRequest;
 import com.liana.post.common.exception.BusinessException;
 import com.liana.post.common.model.Result;
-import com.liana.post.common.util.IdGeneratorUtil;
 import com.liana.post.transport.constant.TransportConstants;
 import com.liana.post.transport.client.DispatchClient;
 import com.liana.post.transport.client.FacilityRouteClient;
@@ -32,12 +30,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.List;
 import java.time.LocalDateTime;
-import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,11 +40,15 @@ public class TransportServiceImpl implements TransportService {
     private static final Logger log = LoggerFactory.getLogger(TransportServiceImpl.class);
 
     private final TransportRepository transportRepository;
+    private final com.liana.post.transport.service.ManifestAssignmentService assignments;
+    private final com.liana.post.transport.service.ManifestAssignmentPublisher publisher;
     private final ObjectProvider<DispatchClient> dispatchClientProvider;
     private final ObjectProvider<TrackingClient> trackingClientProvider;
     private final ObjectProvider<FacilityRouteClient> facilityRouteClientProvider;
 
-    public TransportServiceImpl(TransportRepository transportRepository, ObjectProvider<DispatchClient> dispatchClientProvider, ObjectProvider<TrackingClient> trackingClientProvider, ObjectProvider<FacilityRouteClient> facilityRouteClientProvider) {
+    public TransportServiceImpl(TransportRepository transportRepository, ObjectProvider<DispatchClient> dispatchClientProvider, ObjectProvider<TrackingClient> trackingClientProvider, ObjectProvider<FacilityRouteClient> facilityRouteClientProvider, com.liana.post.transport.service.ManifestAssignmentService assignments, com.liana.post.transport.service.ManifestAssignmentPublisher publisher) {
+        this.assignments = assignments;
+        this.publisher = publisher;
         this.transportRepository = transportRepository;
         this.dispatchClientProvider = dispatchClientProvider;
         this.trackingClientProvider = trackingClientProvider;
@@ -155,10 +154,19 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    @Transactional
     public TransportScheduleEntity updateSchedule(String scheduleCode, TransportScheduleRequest request) {
         TransportScheduleEntity entity = transportRepository.findScheduleByCode(scheduleCode)
                 .orElseThrow(() -> new BusinessException(404, "transport schedule not found: " + scheduleCode));
+        entity = transportRepository.lockSchedule(entity.getId());
         validateSchedule(request);
+        if (!transportRepository.findTasksByScheduleId(entity.getId()).isEmpty()
+                && (!java.util.Objects.equals(entity.getAssetId(), request.getAssetId())
+                || !java.util.Objects.equals(entity.getRouteId(), request.getRouteId())
+                || !java.util.Objects.equals(entity.getDepartureTime(), request.getDepartureTime())
+                || !java.util.Objects.equals(entity.getArrivalTime(), request.getArrivalTime()))) {
+            throw new BusinessException(409, "班次已有任务或取消待确认分配，请先取消并等待释放，不能覆盖原运力和时刻");
+        }
         validateScheduleAssignment(request, entity.getId());
         entity.setAssetId(request.getAssetId());
         entity.setRouteId(request.getRouteId());
@@ -181,142 +189,34 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
-    @Transactional
     public TransportTaskEntity createTask(TransportTaskRequest request) {
-        validateTask(request);
-        DispatchBagBriefResponse bag = loadDispatchBag(request.getDispatchBagId());
-        if (transportRepository.findTaskByDispatchBagId(request.getDispatchBagId()).isPresent()) {
-            throw new BusinessException(409, "transport task already exists for dispatch bag");
-        }
-        if (request.getScheduleId() != null) {
-            TransportTaskEntity existing = transportRepository.findActiveTaskByScheduleId(request.getScheduleId()).orElse(null);
-            if (existing != null) {
-                TransportScheduleEntity schedule = transportRepository.lockSchedule(request.getScheduleId());
-                if (!canCarry(schedule, bag)) throw new BusinessException(409, "schedule cannot carry this bag");
-                transportRepository.addTaskBag(taskBag(existing, bag));
-                linkDispatchBag(bag.getDispatchBagId(), existing.getTaskCode());
-                recordTrackingEvent(bag.getDispatchBagId(), existing.getTaskCode(), existing.getStatus(), "bag loaded");
-                return existing;
-            }
-        }
-        TransportTaskEntity entity = new TransportTaskEntity();
-        entity.setTaskCode(StringUtils.hasText(request.getTaskCode()) ? request.getTaskCode().trim() : IdGeneratorUtil.generateBizNo("TT"));
-        entity.setDispatchBagId(request.getDispatchBagId());
-        entity.setStatus(TransportConstants.TASK_STATUS_CREATED);
-        if (request.getScheduleId() != null) {
-            assignSchedule(entity, bag, request.getScheduleId());
-        } else if (request.getAssetId() != null || request.getRouteId() != null) {
-            throw new BusinessException(400, "select a schedule to assign its route and asset");
-        }
-        entity = transportRepository.saveTask(entity);
-        transportRepository.addTaskBag(taskBag(entity, bag));
-        linkDispatchBag(entity.getDispatchBagId(), entity.getTaskCode());
-        if (entity.getScheduleId() != null) recordTrackingEvent(entity.getDispatchBagId(), entity.getTaskCode(), entity.getStatus(), "task scheduled");
-        return entity;
+        return assignments.create(request);
     }
 
     @Override
-    @Transactional
     public TransportTaskEntity createTaskFromDispatchBag(Long dispatchBagId) {
-        if (dispatchBagId == null) {
-            throw new BusinessException(400, "dispatchBagId is required");
-        }
-        DispatchBagBriefResponse bag = loadDispatchBag(dispatchBagId);
-        if (transportRepository.findTaskByDispatchBagId(dispatchBagId).isPresent()) {
-            return transportRepository.findTaskByDispatchBagId(dispatchBagId).orElseThrow();
-        }
-        TransportTaskEntity entity = new TransportTaskEntity();
-        entity.setTaskCode(IdGeneratorUtil.generateBizNo("TT"));
-        entity.setDispatchBagId(dispatchBagId);
-        entity.setStatus(TransportConstants.TASK_STATUS_CREATED);
-        TransportTaskEntity pendingTask = entity;
-        if (StringUtils.hasText(bag.getFacilityRouteCode())) {
-            transportRepository.findRoutesByFacilityRouteCode(bag.getFacilityRouteCode()).stream()
-                    .flatMap(route -> transportRepository.findFutureSchedulesByRouteId(route.getId()).stream())
-                    .sorted(Comparator.comparing(TransportScheduleEntity::getDepartureTime))
-                    .filter(schedule -> canCarry(schedule, bag))
-                    .findFirst().ifPresent(schedule -> assignSchedule(pendingTask, bag, schedule.getId()));
-        }
-        if (entity.getScheduleId() != null) {
-            TransportTaskEntity existing = transportRepository.findActiveTaskByScheduleId(entity.getScheduleId()).orElse(null);
-            if (existing != null) {
-                transportRepository.addTaskBag(taskBag(existing, bag));
-                linkDispatchBag(dispatchBagId, existing.getTaskCode());
-                recordTrackingEvent(dispatchBagId, existing.getTaskCode(), existing.getStatus(), "bag loaded");
-                return existing;
-            }
-        }
-        entity = transportRepository.saveTask(entity);
-        transportRepository.addTaskBag(taskBag(entity, bag));
-        linkDispatchBag(dispatchBagId, entity.getTaskCode());
-        if (entity.getScheduleId() != null) recordTrackingEvent(dispatchBagId, entity.getTaskCode(), entity.getStatus(), "task scheduled from dispatch bag");
-        return entity;
+        var request = new TransportTaskRequest();
+        request.setDispatchBagId(dispatchBagId);
+        return assignments.create(request);
     }
 
     @Override
-    @Transactional
     public TransportTaskEntity updateTaskStatus(String taskCode, TransportTaskStatusRequest request) {
-        TransportTaskEntity entity = transportRepository.findTaskByCode(taskCode)
-                .orElseThrow(() -> new BusinessException(404, "transport task not found: " + taskCode));
-        String newStatus = normalizeTaskStatus(request.getStatus());
-        if (!canTransition(entity.getStatus(), newStatus)) {
-            throw new BusinessException(409, "invalid transport task status transition");
+        var task = assignments.status(taskCode, request);
+        if (!List.of("CANCELLING", "CANCELLED").contains(task.getStatus())) {
+            for (var bag : assignments.bagIds(task.getId())) recordTrackingEvent(bag, taskCode, task.getStatus(), "task status updated");
         }
-        if (!TransportConstants.TASK_STATUS_CANCELLED.equals(newStatus)
-                && !TransportConstants.TASK_STATUS_CREATED.equals(newStatus) && entity.getScheduleId() == null) {
-            throw new BusinessException(409, "task has no assigned schedule");
-        }
-        if (TransportConstants.TASK_STATUS_DEPARTED.equals(newStatus)) {
-            TransportScheduleEntity schedule = transportRepository.findScheduleById(entity.getScheduleId())
-                    .orElseThrow(() -> new BusinessException(404, "transport schedule not found"));
-            if ("SUSPENDED".equals(schedule.getStatus())) throw new BusinessException(409, "schedule is suspended");
-            for (TransportTaskBagEntity loaded : transportRepository.findTaskBags(entity.getId())) {
-                DispatchBagBriefResponse bag = loadDispatchBag(loaded.getDispatchBagId());
-                if (!"DISPATCHED".equals(bag.getStatus())) {
-                    throw new BusinessException(409, "all loaded bags must be handed off before departure");
-                }
-            }
-        }
-        entity.setStatus(newStatus);
-        entity = transportRepository.updateTask(entity);
-        if (!TransportConstants.TASK_STATUS_CANCELLED.equals(newStatus)) {
-            for (TransportTaskBagEntity loaded : transportRepository.findTaskBags(entity.getId())) {
-                recordTrackingEvent(loaded.getDispatchBagId(), entity.getTaskCode(), newStatus, "task status updated");
-            }
-        }
-        return entity;
-    }
-
-    @Override
-    @Transactional
-    public TransportTaskEntity assignTask(String taskCode, Long scheduleId) {
-        TransportTaskEntity task = transportRepository.findTaskByCode(taskCode)
-                .orElseThrow(() -> new BusinessException(404, "transport task not found: " + taskCode));
-        if (!TransportConstants.TASK_STATUS_CREATED.equals(task.getStatus())) {
-            throw new BusinessException(409, "only pending tasks can be assigned");
-        }
-        assignSchedule(task, loadDispatchBag(task.getDispatchBagId()), scheduleId);
-        task = transportRepository.updateTask(task);
-        recordTrackingEvent(task.getDispatchBagId(), task.getTaskCode(), task.getStatus(), "schedule assigned");
         return task;
     }
 
     @Override
-    @Scheduled(fixedDelay = 60000)
+    public TransportTaskEntity assignTask(String taskCode, Long scheduleId) {
+        return assignments.assign(taskCode, scheduleId);
+    }
+
+    @Override
     public int retryUnlinkedTaskBags() {
-        int linked = 0;
-        for (TransportTaskBagEntity bag : transportRepository.findUnlinkedTaskBags()) {
-            TransportTaskEntity task = transportRepository.findTaskById(bag.getTaskId()).orElse(null);
-            if (task == null) continue;
-            try {
-                linkDispatchBagNow(bag.getDispatchBagId(), task.getTaskCode());
-                transportRepository.markTaskBagLinked(bag.getId());
-                linked++;
-            } catch (Exception ex) {
-                log.warn("failed to retry dispatch link for bag {}", bag.getDispatchBagId(), ex);
-            }
-        }
-        return linked;
+        return publisher.publishDue();
     }
 
     @Override
@@ -335,7 +235,7 @@ public class TransportServiceImpl implements TransportService {
     private TransportTaskEntity withBags(TransportTaskEntity task) {
         task.setBagNos(transportRepository.findTaskBags(task.getId()).stream()
                 .map(TransportTaskBagEntity::getBagNo).toList());
-        return task;
+        return assignments.enrich(task);
     }
 
     @Override
@@ -358,11 +258,6 @@ public class TransportServiceImpl implements TransportService {
         response.addBreakdown("任务状态", countBy(tasks.getList().stream().map(TransportTaskEntity::getStatus).collect(Collectors.toList())));
         response.addBreakdown("计划状态", countBy(schedules.getList().stream().map(TransportScheduleEntity::getStatus).collect(Collectors.toList())));
         return response;
-    }
-
-    @Override
-    public void initDefaults() {
-        transportRepository.seedDefaults();
     }
 
     private List<DashboardSummaryResponse.BreakdownItem> countBy(List<String> values) {
@@ -415,11 +310,11 @@ public class TransportServiceImpl implements TransportService {
         }
         if (request.getDepartureTime() == null || request.getArrivalTime() == null
                 || !request.getArrivalTime().isAfter(request.getDepartureTime())
-                || !request.getDepartureTime().isAfter(LocalDateTime.now())) {
+                || !request.getDepartureTime().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
             throw new BusinessException(400, "schedule needs a future departure and later arrival");
         }
-        if (!request.getDepartureTime().getDayOfWeek().name().substring(0, 3).equalsIgnoreCase(request.getWeekday())) {
-            throw new BusinessException(400, "weekday must match departure date");
+        if (!request.getDepartureTime().plusHours(12).getDayOfWeek().name().substring(0, 3).equalsIgnoreCase(request.getWeekday())) {
+            throw new BusinessException(400, "weekday must match departure date at UTC+12");
         }
         if (!transportRepository.findOverlappingSchedules(asset.getId(), request.getDepartureTime(), request.getArrivalTime(), excludedId).isEmpty()) {
             throw new BusinessException(409, "asset already has an overlapping schedule");
@@ -445,109 +340,12 @@ public class TransportServiceImpl implements TransportService {
         }
     }
 
-    private void validateTask(TransportTaskRequest request) {
-        if (request == null || request.getDispatchBagId() == null) {
-            throw new BusinessException(400, "dispatchBagId is required");
-        }
-    }
-
-    private DispatchBagBriefResponse loadDispatchBag(Long dispatchBagId) {
-        DispatchClient client = dispatchClientProvider.getIfAvailable();
-        if (client == null) {
-            throw new BusinessException(503, "dispatch client unavailable");
-        }
-        Result<DispatchBagBriefResponse> response = client.getBagById(dispatchBagId);
-        if (response == null || response.getCode() == null || response.getCode() != 200) {
-            String message = response == null || !StringUtils.hasText(response.getMessage())
-                    ? "dispatch bag lookup failed: " + dispatchBagId
-                    : response.getMessage();
-            throw new BusinessException(502, message);
-        }
-        DispatchBagBriefResponse bag = response.getData();
-        if (bag == null) {
-            throw new BusinessException(404, "dispatch bag not found: " + dispatchBagId);
-        }
-        return bag;
-    }
-
-    private boolean canCarry(TransportScheduleEntity schedule, DispatchBagBriefResponse bag) {
-        TransportRouteEntity route = transportRepository.findRouteById(schedule.getRouteId()).orElse(null);
-        TransportAssetEntity asset = transportRepository.findAssetById(schedule.getAssetId()).orElse(null);
-        if (route == null || asset == null || !assetUsable(asset) || !assetMatchesRoute(asset, route)
-                || !"ACTIVE".equals(route.getStatus()) || "SUSPENDED".equals(schedule.getStatus())
-                || !schedule.getDepartureTime().isAfter(LocalDateTime.now())
-                || route.getFacilityRouteCode() == null
-                || !route.getFacilityRouteCode().equalsIgnoreCase(bag.getFacilityRouteCode())
-                || !route.getOriginFacilityId().equalsIgnoreCase(bag.getOriginFacilityCode())
-                || !route.getDestinationFacilityId().equalsIgnoreCase(bag.getDestinationFacilityCode())) return false;
-        BigDecimal used = BigDecimal.ZERO;
-        for (TransportTaskEntity task : transportRepository.findTasksByScheduleId(schedule.getId())) {
-            for (TransportTaskBagEntity loaded : transportRepository.findTaskBags(task.getId())) {
-                used = used.add(BigDecimal.valueOf(loaded.getWeightGrams() == null ? 0 : loaded.getWeightGrams()));
-            }
-        }
-        BigDecimal weight = BigDecimal.valueOf(bag.getTotalWeightGrams() == null ? 0 : bag.getTotalWeightGrams());
-        return asset.getCapacity() != null && used.add(weight).compareTo(asset.getCapacity().multiply(BigDecimal.valueOf(1000))) <= 0;
-    }
-
-    private void assignSchedule(TransportTaskEntity task, DispatchBagBriefResponse bag, Long scheduleId) {
-        TransportScheduleEntity schedule = transportRepository.lockSchedule(scheduleId);
-        if (!StringUtils.hasText(bag.getFacilityRouteCode()) || !canCarry(schedule, bag)) {
-            throw new BusinessException(409, "schedule does not match the bag route or has no capacity");
-        }
-        task.setScheduleId(schedule.getId());
-        task.setRouteId(schedule.getRouteId());
-        task.setAssetId(schedule.getAssetId());
-        task.setStatus(TransportConstants.TASK_STATUS_ASSIGNED);
-    }
-
-    private TransportTaskBagEntity taskBag(TransportTaskEntity task, DispatchBagBriefResponse bag) {
-        TransportTaskBagEntity link = new TransportTaskBagEntity();
-        link.setTaskId(task.getId());
-        link.setDispatchBagId(bag.getDispatchBagId());
-        link.setBagNo(bag.getBagNo());
-        link.setWeightGrams(bag.getTotalWeightGrams() == null ? 0 : bag.getTotalWeightGrams());
-        link.setCreatedAt(LocalDateTime.now());
-        return link;
-    }
-
-    private boolean canTransition(String oldStatus, String newStatus) {
-        if (oldStatus.equals(newStatus)) return true;
-        return switch (oldStatus) {
-            case "CREATED" -> newStatus.equals("ASSIGNED") || newStatus.equals("CANCELLED");
-            case "ASSIGNED" -> newStatus.equals("DEPARTED") || newStatus.equals("CANCELLED");
-            case "DEPARTED" -> newStatus.equals("IN_TRANSIT") || newStatus.equals("ARRIVED");
-            case "IN_TRANSIT" -> newStatus.equals("ARRIVED");
-            case "ARRIVED" -> newStatus.equals("COMPLETED");
-            default -> false;
-        };
-    }
-
-    private void linkDispatchBag(Long dispatchBagId, String taskCode) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        linkDispatchBagNow(dispatchBagId, taskCode);
-                    } catch (Exception ex) {
-                        log.warn("dispatch link pending retry for bag {} and task {}", dispatchBagId, taskCode, ex);
-                    }
-                }
-            });
-            return;
-        }
-        linkDispatchBagNow(dispatchBagId, taskCode);
-    }
-
-    private void linkDispatchBagNow(Long dispatchBagId, String taskCode) {
-        DispatchClient client = dispatchClientProvider.getIfAvailable();
+    private DispatchBagBriefResponse loadDispatchBag(Long id) {
+        var client = dispatchClientProvider.getIfAvailable();
         if (client == null) throw new BusinessException(503, "dispatch client unavailable");
-        DispatchTransportTaskLinkRequest request = new DispatchTransportTaskLinkRequest();
-        request.setTransportTaskCode(taskCode);
-        Result<DispatchBagBriefResponse> linked = client.linkTransportTask(dispatchBagId, request);
-        if (linked == null || !linked.isSuccess()) throw new BusinessException(502, "failed to link dispatch bag to transport task");
-        transportRepository.findTaskBagByDispatchBagId(dispatchBagId).ifPresent(link -> transportRepository.markTaskBagLinked(link.getId()));
+        var result = client.getBagById(id);
+        if (result == null || !result.isSuccess() || result.getData() == null) throw new BusinessException(502, "bag lookup failed");
+        return result.getData();
     }
 
     private void recordTrackingEvent(Long dispatchBagId, String taskCode, String status, String note) {

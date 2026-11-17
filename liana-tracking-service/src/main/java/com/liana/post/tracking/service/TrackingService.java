@@ -13,5 +13,4 @@ public interface TrackingService {
     List<TrackingEventResponse> listEvents();
     List<TrackingEventResponse> listByWaybillNo(String waybillNo);
     List<TrackingEventResponse> search(TrackingQueryRequest request);
-    void initDefaults();
 }

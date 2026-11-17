@@ -1,6 +1,6 @@
 package com.liana.post.dispatch.service.impl;
 
-import com.liana.post.common.dto.dispatch.MailBagSyncRequest;
+import com.liana.post.common.dto.dispatch.PackingConfirmation;
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateQueryRequest;
 import com.liana.post.common.dto.dispatch.MailDispatchCandidateResponse;
@@ -15,7 +15,6 @@ import com.liana.post.common.model.Result;
 import com.liana.post.common.util.JwtTokenUtil;
 import com.liana.post.dispatch.client.OmsClient;
 import com.liana.post.dispatch.client.FacilityRouteClient;
-import com.liana.post.dispatch.client.SortingManifestClient;
 import com.liana.post.dispatch.constant.DispatchConstants;
 import com.liana.post.dispatch.model.dto.DispatchBagCreateRequest;
 import com.liana.post.dispatch.model.dto.DispatchBagResponse;
@@ -34,20 +33,15 @@ import com.liana.post.dispatch.model.entity.HandoffRecordEntity;
 import com.liana.post.dispatch.model.entity.RouteRuleEntity;
 import com.liana.post.dispatch.repository.DispatchRepository;
 import com.liana.post.dispatch.service.DispatchService;
+import com.liana.post.dispatch.service.ManifestOutbox;
+import com.liana.post.dispatch.service.BagPackingService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -63,28 +57,25 @@ import java.util.stream.Collectors;
 public class DispatchServiceImpl implements DispatchService {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final Logger log = LoggerFactory.getLogger(DispatchServiceImpl.class);
 
     private final DispatchRepository dispatchRepository;
     private final ObjectProvider<OmsClient> omsClientProvider;
     private final HttpServletRequest httpServletRequest;
-    private final ObjectProvider<SortingManifestClient> sortingClientProvider;
+    private final ManifestOutbox manifestOutbox;
+    private final BagPackingService bagPacking;
     private final ObjectProvider<FacilityRouteClient> facilityRouteClientProvider;
-    private final String sortingServiceUrl;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public DispatchServiceImpl(DispatchRepository dispatchRepository,
                                ObjectProvider<OmsClient> omsClientProvider,
                                HttpServletRequest httpServletRequest,
-                               ObjectProvider<SortingManifestClient> sortingClientProvider,
                                ObjectProvider<FacilityRouteClient> facilityRouteClientProvider,
-                               @Value("${sorting.service.url:http://localhost:8087}") String sortingServiceUrl) {
+                               ManifestOutbox manifestOutbox, BagPackingService bagPacking) {
         this.dispatchRepository = dispatchRepository;
         this.omsClientProvider = omsClientProvider;
         this.httpServletRequest = httpServletRequest;
-        this.sortingClientProvider = sortingClientProvider;
+        this.manifestOutbox = manifestOutbox;
+        this.bagPacking = bagPacking;
         this.facilityRouteClientProvider = facilityRouteClientProvider;
-        this.sortingServiceUrl = sortingServiceUrl;
     }
 
     @Override
@@ -157,12 +148,13 @@ public class DispatchServiceImpl implements DispatchService {
     @Transactional
     public DispatchBagResponse createDispatchBag(DispatchBagCreateRequest request) {
         assertBagOriginOwned(requireCurrentUser(), request.getOriginFacilityCode());
-        List<String> mailNos = request.getMailNoList();
+        List<String> mailNos = normalizePackingMailNos(request.getMailNoList());
         if (mailNos == null || mailNos.isEmpty()) {
             throw new BusinessException(400, "mailNoList cannot be empty");
         }
         List<MailDispatchCandidateResponse> candidates = loadCandidates(request.getOriginFacilityCode(), request.getDestinationFacilityCode(), request.getMailTypeCode(), request.getMailScope(), request.getDestCountryCode());
         validateCandidates(candidates, mailNos);
+        candidates = candidates.stream().filter(candidate -> mailNos.contains(candidate.getWaybillNo())).toList();
 
         String effectiveCountryCode = resolveEffectiveDestCountryCode(request.getDestCountryCode(), candidates);
         String destinationFacilityCode = resolveDestinationFacilityCode(request.getDestinationFacilityCode(), candidates);
@@ -187,16 +179,18 @@ public class DispatchServiceImpl implements DispatchService {
         entity.setMailTypeCode(request.getMailTypeCode());
         entity.setMailNoListAsList(mailNos);
         entity.setMailCount(mailNos.size());
-        entity.setTotalWeightGrams(calculateWeight(mailNos.size()));
+        List<MailDispatchCandidateResponse> selectedCandidates = candidates;
+        List<PackingConfirmation.Item> packingItems = mailNos.stream().map(no -> {
+            var candidate = selectedCandidates.stream().filter(item -> no.equals(item.getWaybillNo())).findFirst().orElseThrow();
+            return new PackingConfirmation.Item(no, candidate.getWeightGrams());
+        }).toList();
+        entity.setTotalWeightGrams(totalPackingWeight(packingItems));
         entity.setStatus(DispatchConstants.BAG_STATUS_CREATED);
         entity = dispatchRepository.saveDispatchBag(entity);
 
-        DispatchMailSyncRequest syncRequest = new DispatchMailSyncRequest();
-        syncRequest.setBagNo(entity.getBagNo());
-        syncRequest.setCurrentFacilityCode(request.getOriginFacilityCode());
-        syncRequest.setMailNoList(mailNos);
-        DispatchBagResponse bag = syncMailBag(syncRequest);
-        return bag;
+        bagPacking.prepare(new PackingConfirmation(java.util.UUID.randomUUID().toString(), entity.getBagNo(),
+                entity.getOriginFacilityCode(), 1, packingItems));
+        return toBagResponse(entity);
     }
 
     @Override
@@ -222,7 +216,9 @@ public class DispatchServiceImpl implements DispatchService {
             throw new BusinessException(400, "dispatch batch route must match the bag route");
         }
         for (DispatchBagEntity candidate : bags) {
+            if (candidate.getLastReceiptEventNo() != null) throw new BusinessException(409, "received bags must use the custody forwarding workflow");
             assertBagOriginOwned(user, candidate.getOriginFacilityCode());
+            bagPacking.requireConfirmed(candidate.getBagNo());
             if (!java.util.Objects.equals(candidate.getOriginFacilityCode(), bag.getOriginFacilityCode())
                     || !java.util.Objects.equals(candidate.getDestinationFacilityCode(), bag.getDestinationFacilityCode())
                     || !java.util.Objects.equals(candidate.getRouteCode(), bag.getRouteCode())) {
@@ -236,12 +232,15 @@ public class DispatchServiceImpl implements DispatchService {
         DispatchBatchEntity entity = new DispatchBatchEntity();
         entity.setBagNo(bag.getBagNo());
         entity.setRouteCode(routeCode);
+        entity.setSourceOrgCode(bag.getOriginFacilityCode());
+        entity.setDestinationOrgCode(bag.getDestinationFacilityCode());
+        entity.setFacilityRouteCode(bag.getFacilityRouteCode());
         entity.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
         entity = dispatchRepository.saveDispatchBatch(entity);
         List<String> bagNos = bags.stream().map(DispatchBagEntity::getBagNo).toList();
         dispatchRepository.replaceBatchBags(entity.getBatchNo(), bagNos);
         entity.setBagNos(bagNos);
-        syncManifestToSorting("M" + entity.getBatchNo(), routeCode, bag.getOriginFacilityCode(),
+        syncManifestToSorting(entity, routeCode, bag.getOriginFacilityCode(),
                 bag.getDestinationFacilityCode(), bags);
         return toBatchResponse(entity);
     }
@@ -250,12 +249,12 @@ public class DispatchServiceImpl implements DispatchService {
     @Transactional
     public DispatchBatchResponse approveDispatchBatch(String batchNo, DispatchBatchApproveRequest request) {
         JwtUserContext user = requireCurrentUser();
-        DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBatchNo(batchNo)
+        DispatchBatchEntity batch = dispatchRepository.lockDispatchBatchByBatchNo(batchNo)
                 .orElseThrow(() -> new BusinessException(404, "dispatch batch not found"));
         for (String bagNo : getBatchBagNos(batch)) {
             DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(bagNo)
                     .orElseThrow(() -> new BusinessException(404, "dispatch bag not found: " + bagNo));
-            assertBagOriginOwned(user, bag.getOriginFacilityCode());
+            assertBagOriginOwned(user, batch.getSourceOrgCode() == null ? bag.getOriginFacilityCode() : batch.getSourceOrgCode());
         }
         if (!DispatchConstants.BATCH_STATUS_PENDING.equals(batch.getStatus())) {
             throw new BusinessException(409, "only pending dispatch batches can be approved");
@@ -269,18 +268,86 @@ public class DispatchServiceImpl implements DispatchService {
 
     @Override
     @Transactional
+    public DispatchBatchResponse sealDispatchBatch(String batchNo) {
+        JwtUserContext user = requireCurrentUser();
+        DispatchBatchEntity batch = dispatchRepository.lockDispatchBatchByBatchNo(batchNo)
+                .orElseThrow(() -> new BusinessException(404, "dispatch batch not found"));
+        if (!java.util.Set.of(DispatchConstants.BATCH_STATUS_PENDING, DispatchConstants.BATCH_STATUS_APPROVED).contains(batch.getStatus())) {
+            throw new BusinessException(409, "only batches awaiting handoff may request sealing");
+        }
+        List<String> bagNos = getBatchBagNos(batch);
+        if (bagNos.isEmpty()) throw new BusinessException(409, "batch has no bags");
+        for (String bagNo : bagNos) {
+            DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(bagNo)
+                    .orElseThrow(() -> new BusinessException(409, "batch bag is missing"));
+            assertBagOriginOwned(user, batch.getSourceOrgCode() == null ? bag.getOriginFacilityCode() : batch.getSourceOrgCode());
+            bagPacking.requireConfirmed(bagNo);
+        }
+        String actor = user.getUserId() == null ? user.getUsername() : user.getUserId().toString();
+        manifestOutbox.enqueueSeal(batch.getManifestNo(), actor);
+        return toBatchResponse(batch);
+    }
+
+    @Override
+    @Transactional
+    public DispatchBatchResponse cancelDispatchBatch(String batchNo, com.liana.post.dispatch.model.dto.DispatchBatchCancelRequest request) {
+        JwtUserContext user = requireCurrentUser();
+        if (request == null || request.reason() == null || request.reason().isBlank() || request.reason().trim().length() > 512) {
+            throw new BusinessException(400, "请填写 512 字以内的作废原因");
+        }
+        DispatchBatchEntity batch = dispatchRepository.lockDispatchBatchByBatchNo(batchNo)
+                .orElseThrow(() -> new BusinessException(404, "dispatch batch not found"));
+        if (!java.util.Set.of("PENDING", "APPROVED", "CANCELLING", "CANCELLED").contains(batch.getStatus())) {
+            throw new BusinessException(409, "已交接批次不能作废，请通过后续交接或差异处理保留事实");
+        }
+        if ("CANCELLED".equals(batch.getStatus())) {
+            assertBagOriginOwned(user, batch.getSourceOrgCode() == null
+                    ? dispatchRepository.findDispatchBagByBagNo(batch.getBagNo()).orElseThrow().getOriginFacilityCode() : batch.getSourceOrgCode());
+            return toBatchResponse(batch);
+        }
+        List<String> bagNos = getBatchBagNos(batch).stream().sorted().toList();
+        if (bagNos.isEmpty()) throw new BusinessException(409, "batch has no bags");
+        for (String bagNo : bagNos) {
+            var bag = dispatchRepository.lockDispatchBagByBagNo(bagNo)
+                    .orElseThrow(() -> new BusinessException(409, "batch bag is missing"));
+            assertBagOriginOwned(user, batch.getSourceOrgCode() == null ? bag.getOriginFacilityCode() : batch.getSourceOrgCode());
+            if (!java.util.Set.of("CREATED", "REVIEWED").contains(bag.getStatus())
+                    || dispatchRepository.findHandoffRecordByBagNo(bagNo).isPresent()) {
+                throw new BusinessException(409, "已有总包交接或到达事实，不能作废路单");
+            }
+            if (bag.getTransportTaskCode() != null && !bag.getTransportTaskCode().isBlank()) {
+                throw new BusinessException(409, "已有总包关联运输任务；任务取消与路单作废须通过后续分配流程分别处理");
+            }
+        }
+        String actor = user.getUserId() == null ? user.getUsername() : user.getUserId().toString();
+        manifestOutbox.enqueueCancel(batch.getManifestNo(), actor, request.reason());
+        if (!java.util.Set.of("CANCELLING", "CANCELLED").contains(batch.getStatus())) {
+            batch.setStatus(DispatchConstants.BATCH_STATUS_CANCELLING);
+            batch.setUpdatedAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
+            dispatchRepository.updateDispatchBatch(batch);
+        }
+        return toBatchResponse(batch);
+    }
+
+    @Override
+    @Transactional
     public HandoffRecordResponse createHandoffRecord(HandoffCreateRequest request) {
         String currentFacilityCode = resolveCurrentFacilityCode();
         if (currentFacilityCode == null || currentFacilityCode.isBlank()) {
             throw new BusinessException(401, "current facility cannot be resolved from token");
         }
 
-        DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getBagNo())
+        // All cross-bag operations lock the batch first, then bags. This serializes handoff vs cancellation.
+        DispatchBatchEntity batch = dispatchRepository.lockDispatchBatchByBagNo(request.getBagNo())
+                .orElseThrow(() -> new BusinessException(409, "请先生成配发批次与路单，等待接收端确认预告后交接"));
+        requireOperableBatch(batch);
+        DispatchBagEntity bag = dispatchRepository.lockDispatchBagByBagNo(request.getBagNo())
                 .orElseThrow(() -> new BusinessException(404, "dispatch bag not found"));
-        if (!currentFacilityCode.equalsIgnoreCase(bag.getOriginFacilityCode())) {
+        String sourceFacilityCode = batch.getSourceOrgCode() == null ? bag.getOriginFacilityCode() : batch.getSourceOrgCode();
+        if (!currentFacilityCode.equalsIgnoreCase(sourceFacilityCode)) {
             throw new BusinessException(403, "current facility does not own this dispatch bag");
         }
-        String destinationFacilityCode = bag.getDestinationFacilityCode();
+        String destinationFacilityCode = batch.getDestinationOrgCode() == null ? bag.getDestinationFacilityCode() : batch.getDestinationOrgCode();
         if (destinationFacilityCode == null || destinationFacilityCode.isBlank()) {
             destinationFacilityCode = resolveFacilityRouteDestination(currentFacilityCode, request.getToFacilityCode());
             bag.setDestinationFacilityCode(destinationFacilityCode);
@@ -294,14 +361,11 @@ public class DispatchServiceImpl implements DispatchService {
                 || dispatchRepository.findHandoffRecordByBagNo(bag.getBagNo()).isPresent()) {
             throw new BusinessException(409, "dispatch bag has already been handed off");
         }
-        DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo())
-                .orElseGet(() -> {
-                    DispatchBatchEntity created = new DispatchBatchEntity();
-                    created.setBagNo(bag.getBagNo());
-                    created.setRouteCode(bag.getRouteCode());
-                    created.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
-                    return dispatchRepository.saveDispatchBatch(created);
-                });
+        if (!"SENT".equals(manifestOutbox.status(batch.getManifestNo()))) {
+            throw new BusinessException(409, "路单预告尚未获接收端确认，请在批次页面查看预告状态并稍后重试");
+        }
+        manifestOutbox.requireSealed(batch.getManifestNo());
+        manifestOutbox.requireAssigned(batch.getManifestNo(), bag.getTransportTaskCode());
 
         if (!DispatchConstants.BATCH_STATUS_APPROVED.equals(batch.getStatus())) {
             batch.setStatus(DispatchConstants.BATCH_STATUS_APPROVED);
@@ -336,10 +400,10 @@ public class DispatchServiceImpl implements DispatchService {
                 .map(bagNo -> dispatchRepository.findDispatchBagByBagNo(bagNo).orElse(null))
                 .filter(java.util.Objects::nonNull)
                 .toList();
-        if (batchBags.size() != batchBagNos.size() || batchBags.stream().anyMatch(item ->
+        if (batchBags.size() != batchBagNos.size() || (batch.getSourceOrgCode() == null && batchBags.stream().anyMatch(item ->
                 !currentFacilityCode.equalsIgnoreCase(item.getOriginFacilityCode())
                         || (item.getDestinationFacilityCode() != null && !item.getDestinationFacilityCode().isBlank()
-                        && !request.getToFacilityCode().equalsIgnoreCase(item.getDestinationFacilityCode())))) {
+                        && !request.getToFacilityCode().equalsIgnoreCase(item.getDestinationFacilityCode()))))) {
             throw new BusinessException(409, "all bags in a batch must be handed off together along their planned route");
         }
         String resolvedDestinationFacilityCode = destinationFacilityCode;
@@ -349,7 +413,7 @@ public class DispatchServiceImpl implements DispatchService {
                     item.setUpdatedAt(LocalDateTime.now());
                     dispatchRepository.updateDispatchBag(item);
                 });
-        syncManifestToSorting("M" + batch.getBatchNo(), batch.getRouteCode(), bag.getOriginFacilityCode(),
+        syncManifestToSorting(batch, batch.getRouteCode(), sourceFacilityCode,
                 request.getToFacilityCode(), batchBags);
 
         return toHandoffResponse(entity);
@@ -358,30 +422,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public Boolean markManifestArrived(ManifestArrivedRequest request) {
-        if (request == null || request.getManifestCode() == null || request.getManifestCode().isBlank()
-                || request.getTotalPackageNo() == null || request.getTotalPackageNo().isBlank()) {
-            throw new BusinessException(400, "manifestCode and totalPackageNo cannot be blank");
-        }
-        DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getTotalPackageNo())
-                .orElse(null);
-        if (bag == null) {
-            return Boolean.TRUE;
-        }
-        DispatchBatchEntity batch = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo()).orElse(null);
-        if (batch == null) {
-            return Boolean.TRUE;
-        }
-        String expectedManifestCode = "M" + batch.getBatchNo();
-        if (!expectedManifestCode.equalsIgnoreCase(request.getManifestCode().trim())) {
-            throw new BusinessException(409, "manifest does not belong to the dispatch bag batch");
-        }
-        if (!getBatchBagNos(batch).stream().anyMatch(bag.getBagNo()::equalsIgnoreCase)) {
-            throw new BusinessException(409, "dispatch bag is not linked to its batch");
-        }
-        bag.setStatus(DispatchConstants.BAG_STATUS_ARRIVED);
-        bag.setUpdatedAt(LocalDateTime.now());
-        dispatchRepository.updateDispatchBag(bag);
-        return Boolean.TRUE;
+        throw new BusinessException(409, "use authenticated immutable bag receipt events");
     }
 
     private List<String> getBatchBagNos(DispatchBatchEntity batch) {
@@ -398,112 +439,57 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional
     public DispatchBagResponse syncMailBag(DispatchMailSyncRequest request) {
-        DispatchBagEntity bag = dispatchRepository.findDispatchBagByBagNo(request.getBagNo())
+        DispatchBagEntity bag = dispatchRepository.lockDispatchBagByBagNo(request.getBagNo())
                 .orElseThrow(() -> new BusinessException(404, "dispatch bag not found"));
-        if (request.getMailNoList() == null || request.getMailNoList().isEmpty()) {
-            throw new BusinessException(400, "mailNoList cannot be empty");
+        assertBagOriginOwned(requireCurrentUser(), bag.getOriginFacilityCode());
+        if (!bag.getOriginFacilityCode().equalsIgnoreCase(request.getCurrentFacilityCode())) {
+            throw new BusinessException(403, "packing facility cannot change");
         }
-        OmsClient omsClient = omsClientProvider.getIfAvailable();
-        if (omsClient == null) {
-            throw new BusinessException(503, "oms client unavailable");
+        List<String> expected = bagPacking.items(bag.getBagNo()).stream().map(PackingConfirmation.Item::mailNo).toList();
+        if (!expected.equals(normalizePackingMailNos(request.getMailNoList()))) {
+            throw new BusinessException(409, "总包装包清单已固定，不能通过同步接口覆盖");
         }
-        int updated = dispatchRepository.assignMailBagToWaybillNos(request.getMailNoList(), bag.getBagNo(), request.getCurrentFacilityCode());
-        if (updated == 0) {
-            throw new BusinessException(400, "no mail updated");
-        }
-        MailBagSyncRequest updateRequest = new MailBagSyncRequest();
-        updateRequest.setBagNo(bag.getBagNo());
-        updateRequest.setCurrentFacilityCode(request.getCurrentFacilityCode());
-        updateRequest.setWaybillNos(request.getMailNoList());
-        omsClient.updateMailStatuses(updateRequest);
-        bag.setMailNoListAsList(request.getMailNoList());
-        bag.setMailCount(request.getMailNoList().size());
-        bag.setStatus(DispatchConstants.BAG_STATUS_REVIEWED);
-        bag.setUpdatedAt(LocalDateTime.now());
-        return toBagResponse(dispatchRepository.updateDispatchBag(bag));
+        return toBagResponse(bag);
     }
 
-    private void syncManifestToSorting(String manifestNo, String routeCode,
+    private void syncManifestToSorting(DispatchBatchEntity batch, String routeCode,
                                        String sourceFacilityCode, String destinationFacilityCode, List<DispatchBagEntity> bags) {
-        String bagNo = bags == null || bags.isEmpty() ? null : bags.get(0).getBagNo();
-        SortingManifestClient client = sortingClientProvider.getIfAvailable();
-        if (client == null) {
-            log.warn("sorting manifest client unavailable, manifest sync skipped. bagNo={}", bagNo);
-            return;
-        }
         ManifestDTO request = new ManifestDTO();
-        request.setManifestCode(manifestNo);
+        request.setManifestCode(batch.getManifestNo());
+        request.setBatchNo(batch.getBatchNo());
+        request.setVersionNo(1);
         request.setOriginNode(sourceFacilityCode);
         request.setTargetNode(destinationFacilityCode);
-        request.setTotalWeight(java.math.BigDecimal.valueOf(bags.stream()
-                .map(DispatchBagEntity::getTotalWeightGrams).filter(java.util.Objects::nonNull)
-                .mapToInt(Integer::intValue).sum()));
+        long totalWeight = 0;
+        boolean allWeightsKnown = true;
         List<TotalPackageDTO> packages = new java.util.ArrayList<>();
         for (DispatchBagEntity bag : bags) {
+            bagPacking.requireConfirmed(bag.getBagNo());
+            List<PackingConfirmation.Item> packingItems = bagPacking.items(bag.getBagNo());
+            if (packingItems.isEmpty()) throw new BusinessException(409, "structured packing is missing");
+            Integer packageWeight = totalPackingWeight(packingItems);
+            if (packageWeight == null) allWeightsKnown = false;
+            else totalWeight += packageWeight;
             TotalPackageDTO totalPackage = new TotalPackageDTO();
             totalPackage.setPackageNo(bag.getBagNo());
             totalPackage.setPackageLevel("TRANSIT");
             totalPackage.setRouteCode(routeCode);
-            totalPackage.setPackageWeight(java.math.BigDecimal.valueOf(bag.getTotalWeightGrams() == null ? 0 : bag.getTotalWeightGrams()));
+            totalPackage.setPackageWeight(packageWeight == null ? null : java.math.BigDecimal.valueOf(packageWeight));
             List<TotalPackageDTO.ManifestItemDTO> items = new java.util.ArrayList<>();
-            for (String mailNo : bag.getMailNoListAsList() == null ? List.<String>of() : bag.getMailNoListAsList()) {
+            for (PackingConfirmation.Item packedItem : packingItems) {
                 TotalPackageDTO.ManifestItemDTO item = new TotalPackageDTO.ManifestItemDTO();
-                item.setItemNo(mailNo);
+                item.setItemNo(packedItem.mailNo());
+                item.setWeight(packedItem.weightGrams() == null ? null : java.math.BigDecimal.valueOf(packedItem.weightGrams()));
                 item.setSeqNo(items.size() + 1);
                 item.setRouteCode(routeCode);
-                item.setWeight(java.math.BigDecimal.ONE);
                 items.add(item);
             }
             totalPackage.setItems(items);
             packages.add(totalPackage);
         }
         request.setTotalPackages(packages);
-        try {
-            Result<Boolean> result = client.syncManifest(request);
-            if (result == null || !Boolean.TRUE.equals(result.getData())) {
-                log.warn("sorting manifest sync returned non-success, bagNo={}, manifestCode={}, result={}",
-                        bagNo, request.getManifestCode(), result);
-                fallbackSyncManifest(request);
-            }
-        } catch (Exception ex) {
-            log.warn("sorting manifest sync failed, bagNo={}, manifestCode={}", bagNo, request.getManifestCode(), ex);
-            fallbackSyncManifest(request);
-        }
-    }
-
-    private void fallbackSyncManifest(ManifestDTO request) {
-        if (sortingServiceUrl == null || sortingServiceUrl.isBlank()) {
-            return;
-        }
-        try {
-            String endpoint = sortingServiceUrl.endsWith("/")
-                    ? sortingServiceUrl + "api/v1/sorting/manifest/sync"
-                    : sortingServiceUrl + "/api/v1/sorting/manifest/sync";
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint))
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .POST(HttpRequest.BodyPublishers.ofString(com.alibaba.fastjson2.JSON.toJSONString(request)))
-                    .build();
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("sorting manifest fallback sync failed, status={}, body={}", response.statusCode(), response.body());
-            }
-        } catch (Exception ex) {
-            log.warn("sorting manifest fallback sync exception, manifestCode={}", request.getManifestCode(), ex);
-        }
-    }
-
-    private DispatchBatchEntity createDispatchBatchAuto(DispatchBagEntity bag) {
-        if (bag == null || bag.getBagNo() == null || bag.getBagNo().isBlank()) {
-            throw new BusinessException(400, "dispatch bag is required");
-        }
-        DispatchBatchEntity existing = dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo()).orElse(null);
-        if (existing != null) return existing;
-        DispatchBatchEntity batch = new DispatchBatchEntity();
-        batch.setBagNo(bag.getBagNo());
-        batch.setRouteCode(bag.getRouteCode());
-        batch.setStatus(DispatchConstants.BATCH_STATUS_PENDING);
-        return dispatchRepository.saveDispatchBatch(batch);
+        request.setTotalWeight(allWeightsKnown ? java.math.BigDecimal.valueOf(totalWeight) : null);
+        manifestOutbox.enqueue(request);
     }
 
     @Override
@@ -513,27 +499,16 @@ public class DispatchServiceImpl implements DispatchService {
     }
 
     @Override
-    @Transactional
     public DispatchBagResponse linkTransportTask(Long id, DispatchTransportTaskLinkRequest request) {
-        if (request == null || request.getTransportTaskCode() == null || request.getTransportTaskCode().isBlank()) {
-            throw new BusinessException(400, "transportTaskCode is required");
-        }
-        DispatchBagEntity existing = dispatchRepository.findDispatchBagById(id)
-                .orElseThrow(() -> new BusinessException(404, "dispatch bag not found: " + id));
-        if (existing.getTransportTaskCode() != null && !existing.getTransportTaskCode().isBlank()
-                && !existing.getTransportTaskCode().equals(request.getTransportTaskCode().trim())) {
-            throw new BusinessException(409, "dispatch bag is already linked to a different transport task");
-        }
-        DispatchBagEntity entity = existing.getTransportTaskCode() == null
-                ? dispatchRepository.linkTransportTask(id, request.getTransportTaskCode().trim()) : existing;
-        return toBagResponse(entity);
+        throw new BusinessException(409, "逐包关联已关闭，请使用整张已封路单的运输分配协议");
     }
 
     @Override
     public List<DispatchBagResponse> listDispatchBags() {
         JwtUserContext user = requireCurrentUser();
         return dispatchRepository.findAllDispatchBags().stream()
-                .filter(bag -> isAdmin(user) || belongsToFacility(bag, user.getFacilityCode()))
+                .filter(bag -> isAdmin(user) || belongsToFacility(bag, user.getFacilityCode()) || dispatchRepository.findDispatchBatchByBagNo(bag.getBagNo())
+                        .map(b -> matchesFacility(b.getSourceOrgCode(), user.getFacilityCode()) || matchesFacility(b.getDestinationOrgCode(), user.getFacilityCode())).orElse(false))
                 .map(this::toBagResponse).toList();
     }
 
@@ -547,13 +522,10 @@ public class DispatchServiceImpl implements DispatchService {
                 .filter(bag -> belongsToFacility(bag, user.getFacilityCode()))
                 .map(DispatchBagEntity::getBagNo).collect(Collectors.toSet());
         return dispatchRepository.findAllDispatchBatches().stream()
-                .filter(batch -> getBatchBagNos(batch).stream().anyMatch(ownedBagNos::contains))
-                .map(batch -> {
-                    List<String> visibleBagNos = getBatchBagNos(batch).stream().filter(ownedBagNos::contains).toList();
-                    batch.setBagNo(visibleBagNos.get(0));
-                    batch.setBagNos(visibleBagNos);
-                    return toBatchResponse(batch);
-                }).toList();
+                .filter(batch -> matchesFacility(batch.getSourceOrgCode(), user.getFacilityCode())
+                        || matchesFacility(batch.getDestinationOrgCode(), user.getFacilityCode())
+                        || (batch.getSourceOrgCode() == null && getBatchBagNos(batch).stream().anyMatch(ownedBagNos::contains)))
+                .map(this::toBatchResponse).toList();
     }
 
     @Override
@@ -592,11 +564,6 @@ public class DispatchServiceImpl implements DispatchService {
         response.addBreakdown("邮袋状态", countBy(bags.stream().map(DispatchBagResponse::getStatus).collect(Collectors.toList())));
         response.addBreakdown("交接状态", countBy(handoffs.stream().map(HandoffRecordResponse::getStatus).collect(Collectors.toList())));
         return response;
-    }
-
-    @Override
-    public void initDefaults() {
-        dispatchRepository.seedDefaults();
     }
 
     private void validateCandidates(List<MailDispatchCandidateResponse> candidates, List<String> mailNos) {
@@ -770,8 +737,18 @@ public class DispatchServiceImpl implements DispatchService {
         return fallbackTargetFacilityCode;
     }
 
-    private int calculateWeight(int mailCount) {
-        return mailCount * 100;
+    private List<String> normalizePackingMailNos(List<String> mailNos) {
+        if (mailNos == null || mailNos.isEmpty()) throw new BusinessException(400, "mailNoList cannot be empty");
+        List<String> normalized = mailNos.stream().map(no -> normalizeRequired(no, "mailNo")).toList();
+        if (new HashSet<>(normalized).size() != normalized.size()) throw new BusinessException(400, "duplicate mail in packing");
+        return normalized;
+    }
+
+    private Integer totalPackingWeight(List<PackingConfirmation.Item> items) {
+        if (items.stream().anyMatch(item -> item.weightGrams() == null)) return null;
+        long total = items.stream().mapToLong(item -> item.weightGrams().longValue()).sum();
+        if (total > Integer.MAX_VALUE) throw new BusinessException(400, "packing weight exceeds supported capacity");
+        return (int) total;
     }
 
     private DispatchBagResponse toBagResponse(DispatchBagEntity entity) {
@@ -784,11 +761,25 @@ public class DispatchServiceImpl implements DispatchService {
         response.setRouteCode(entity.getRouteCode());
         response.setFacilityRouteCode(entity.getFacilityRouteCode());
         response.setTransportTaskCode(entity.getTransportTaskCode());
+        var manifestBatch = dispatchRepository.findDispatchBatchByBagNo(entity.getBagNo()).orElse(null);
+        if (manifestBatch != null) {
+            response.setManifestNo(manifestBatch.getManifestNo());
+            response.setManifestBatchStatus(manifestBatch.getStatus());
+            response.setCurrentSourceOrgCode(manifestBatch.getSourceOrgCode());
+            response.setCurrentDestinationOrgCode(manifestBatch.getDestinationOrgCode());
+        }
         response.setStatus(effectiveBagStatus(entity));
         response.setMailTypeCode(entity.getMailTypeCode());
-        response.setMailNoList(entity.getMailNoListAsList());
-        response.setMailCount(entity.getMailCount());
-        response.setTotalWeightGrams(entity.getTotalWeightGrams());
+        List<PackingConfirmation.Item> items = bagPacking.items(entity.getBagNo());
+        response.setMailNoList(items.stream().map(PackingConfirmation.Item::mailNo).toList());
+        response.setMailCount(items.size());
+        Integer totalWeight = items.isEmpty() ? null : totalPackingWeight(items);
+        response.setTotalWeightGrams(totalWeight);
+        BagPackingService.State packingState = bagPacking.state(entity.getBagNo());
+        response.setPackingVersion(packingState.packingVersion());
+        response.setPackingSyncStatus(packingState.syncStatus());
+        response.setPackingError(packingState.lastError());
+        response.setWeightSource(totalWeight == null ? "UNKNOWN" : "OMS_MAIL_SUM");
         return response;
     }
 
@@ -809,6 +800,18 @@ public class DispatchServiceImpl implements DispatchService {
         DispatchBatchResponse response = new DispatchBatchResponse();
         response.setId(entity.getId());
         response.setBatchNo(entity.getBatchNo());
+        response.setManifestNo(entity.getManifestNo());
+        response.setSourceOrgCode(entity.getSourceOrgCode());
+        response.setDestinationOrgCode(entity.getDestinationOrgCode());
+        response.setFacilityRouteCode(entity.getFacilityRouteCode());
+        response.setManifestSyncStatus(manifestOutbox.status(entity.getManifestNo()));
+        var seal = manifestOutbox.sealState(entity.getManifestNo());
+        response.setManifestSealStatus(seal == null ? "NOT_REQUESTED" : seal.status());
+        response.setManifestSealError(seal == null ? null : seal.lastError());
+        var cancel = manifestOutbox.cancelState(entity.getManifestNo());
+        response.setManifestCancelStatus(cancel == null ? "NOT_REQUESTED" : cancel.status());
+        response.setManifestCancelError(cancel == null ? null : cancel.lastError());
+        response.setManifestCancelReason(cancel == null ? null : cancel.reason());
         response.setBagNo(entity.getBagNo());
         response.setBagNos(entity.getBagNos() == null ? List.of(entity.getBagNo()) : entity.getBagNos());
         response.setRouteCode(entity.getRouteCode());
@@ -822,6 +825,7 @@ public class DispatchServiceImpl implements DispatchService {
         HandoffRecordResponse response = new HandoffRecordResponse();
         response.setId(entity.getId());
         response.setHandoffNo(entity.getHandoffNo());
+        response.setBatchNo(entity.getBatchNo());
         response.setBagNo(entity.getBagNo());
         response.setFromFacilityCode(entity.getFromFacilityCode());
         response.setToFacilityCode(entity.getToFacilityCode());
@@ -945,6 +949,12 @@ public class DispatchServiceImpl implements DispatchService {
     private void assertBagOriginOwned(JwtUserContext user, String originFacilityCode) {
         if (!isAdmin(user) && !matchesFacility(originFacilityCode, user.getFacilityCode())) {
             throw new BusinessException(403, "current facility does not own this dispatch bag");
+        }
+    }
+
+    private void requireOperableBatch(DispatchBatchEntity batch) {
+        if (java.util.Set.of("CANCELLING", "CANCELLED").contains(batch.getStatus())) {
+            throw new BusinessException(409, "路单正在作废或已作废，禁止交接和新增运输关联");
         }
     }
 

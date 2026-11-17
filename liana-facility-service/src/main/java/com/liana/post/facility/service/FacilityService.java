@@ -1,7 +1,6 @@
 package com.liana.post.facility.service;
 
 import com.liana.post.common.dto.dashboard.DashboardSummaryResponse;
-import com.liana.post.facility.model.dto.FacilityBootstrapData;
 import com.liana.post.facility.model.dto.FacilityCreateRequest;
 import com.liana.post.facility.model.dto.FacilityRouteCreateRequest;
 import com.liana.post.facility.model.dto.FacilityTypeCreateRequest;
@@ -25,5 +24,4 @@ public interface FacilityService {
     List<FacilityRouteEntity> listRoutes();
     Map<String, Object> demoPostalNetwork();
     DashboardSummaryResponse dashboardSummary();
-    FacilityBootstrapData bootstrapDefaults();
 }

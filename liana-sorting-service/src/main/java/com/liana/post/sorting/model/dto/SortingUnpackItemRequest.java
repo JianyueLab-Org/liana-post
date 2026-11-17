@@ -1,7 +1,8 @@
 package com.liana.post.sorting.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -16,8 +17,10 @@ public class SortingUnpackItemRequest {
     private String operatorId;
     private String deviceId;
     private String scanBatchNo;
+    @NotBlank
     private String idempotencyKey;
-    @NotEmpty
+    @NotNull
+    @Valid
     private List<SortingUnpackItemEntry> items;
 
     public String getStationCode() { return stationCode; }

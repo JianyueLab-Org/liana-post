@@ -1,0 +1,122 @@
+# Optional actual-service smoke environment, used together with compose.verify.yml.
+# Package service jars first. No Nacos registration or connection to the running demo stack.
+x-service: &service
+  image: eclipse-temurin:17-jre
+  profiles: [services]
+  command: ["java", "-jar", "/app/app.jar"]
+  environment: &environment
+    JAVA_TOOL_OPTIONS: -Duser.timezone=UTC -Xmx192m
+    SPRING_CONFIG_IMPORT: optional:file:/app/no-remote-config.yml
+    SPRING_CLOUD_NACOS_CONFIG_ENABLED: "false"
+    SPRING_CLOUD_NACOS_DISCOVERY_ENABLED: "false"
+    SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED: "false"
+    SPRING_CLOUD_SENTINEL_ENABLED: "false"
+    SPRING_SQL_INIT_MODE: never
+    DB_PASSWORD: ${LIANA_DB_PASSWORD:?Set a dedicated verification password}
+    SPRING_DATASOURCE_USERNAME: root
+    SPRING_DATASOURCE_PASSWORD: ${LIANA_DB_PASSWORD:?Set a dedicated verification password}
+    REDIS_HOST: redis
+    OMS_SERVICE_URL: http://oms:8083
+    PACKING_INTERNAL_TOKEN: ${LIANA_PACKING_TOKEN:?Set a shared token for isolated packing confirmation}
+    MANIFEST_INTERNAL_TOKEN: ${LIANA_MANIFEST_TOKEN:?Set a shared token for isolated manifest sealing}
+    TRACKING_SERVICE_URL: http://tracking:8085
+    DISPATCH_SERVICE_URL: http://dispatch:8084
+    FACILITY_SERVICE_URL: http://facility:8082
+    SORTING_SERVICE_URL: http://sorting:8087
+    TRANSPORT_SERVICE_URL: http://transport:8086
+    POSTAGE_SERVICE_URL: http://postage:8090
+    SPRING_CLOUD_OPENFEIGN_CLIENT_CONFIG_LIANA-OMS-SERVICE_URL: http://oms:8083
+    SPRING_CLOUD_OPENFEIGN_CLIENT_CONFIG_LIANA-DISPATCH-SERVICE_URL: http://dispatch:8084
+    POSTAGE_SEED_INITIAL_TARIFF: "false"
+    LOGGING_LEVEL_ROOT: WARN
+    MYBATIS_PLUS_CONFIGURATION_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  redis:
+    image: redis:7.2
+    profiles: [services]
+
+  auth:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-auth-service/target/liana-auth-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18081:8081"]
+
+  facility:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/facility_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-facility-service/target/liana-facility-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18082:8082"]
+
+  oms:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/oms_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-oms-service/target/liana-oms-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18083:8083"]
+
+  dispatch:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/dispatch_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-dispatch-service/target/liana-dispatch-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18084:8084"]
+
+  tracking:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/tracking_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-tracking-service/target/liana-tracking-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18085:8085"]
+
+  transport:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8086
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transport_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-transport-service/target/liana-transport-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18086:8086"]
+
+  sorting:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/sorting_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-sorting-service/target/liana-sorting-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18087:8087"]
+
+  postage:
+    <<: *service
+    environment:
+      <<: *environment
+      SERVER_PORT: 8090
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/postage_db?serverTimezone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    volumes:
+      - ../liana-postage-service/target/liana-postage-service-1.0.0-exec.jar:/app/app.jar:ro
+    ports: ["127.0.0.1:18090:8090"]

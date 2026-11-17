@@ -15,7 +15,7 @@ public interface SortingService {
     List<SortingPendingRouteItemResponse> listPendingRouteItems(String stationCode);
     SortingPackageResponse reBag(SortingRebagRequest request);
     List<SortingSlotSummaryResponse> listSlotSummaries(String stationCode);
-    SortingPackageResponse sealBagBySlot(String slotCode, String stationCode, String operatorId);
+    SortingPackageResponse sealBagBySlot(String slotCode, String stationCode, String operatorId, String requestNo);
     List<CountrySlotSummaryResponse> listCountrySlotSummaries(String stationCode);
     List<SortingPackageResponse> sealCountrySlot(CountrySlotBulkRequest request);
     SortingUnpackPreviewResponse previewUnpackItems(String packageNo, String manifestNo);
@@ -25,5 +25,4 @@ public interface SortingService {
     List<SortingLineResponse> listLines(String packageNo);
     List<SortingDiscrepancyResponse> listDiscrepancies(String packageNo);
     DashboardSummaryResponse dashboardSummary(String stationCode);
-    void initDefaults();
 }

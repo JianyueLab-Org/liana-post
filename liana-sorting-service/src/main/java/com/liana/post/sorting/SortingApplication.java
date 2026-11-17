@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
 @MapperScan("com.liana.post.sorting.mapper")
 @EnableFeignClients(basePackages = "com.liana.post.sorting.client")
 public class SortingApplication {
